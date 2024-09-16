@@ -2,6 +2,9 @@
 
 This ESLint plugin ensures that only the correct parameters are used in Next.js routes based on the file-based routing system. This is particularly useful in Next.js applications where route parameters are predefined and should be enforced at compile-time.
 
+<a href="https://www.npmjs.com/package/eslint-plugin-next-route-params" target="\_parent">
+  <img alt="" src="https://img.shields.io/npm/dm/eslint-plugin-next-route-params.svg" />
+
 ## Installation
 
 To use this plugin, you need to have ESLint installed. You can install ESLint and the plugin using npm or yarn:
