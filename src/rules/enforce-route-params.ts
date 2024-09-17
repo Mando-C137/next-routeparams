@@ -1,4 +1,3 @@
-import { AST_NODE_TYPES } from "@typescript-eslint/types";
 import {
   appRouterFolderExists,
   handleProps,
@@ -8,7 +7,7 @@ import {
   readFileBasedParameters,
 } from "../utils/utils";
 import path from "path";
-import { ESLintUtils } from "@typescript-eslint/utils";
+import { AST_NODE_TYPES, ESLintUtils } from "@typescript-eslint/utils";
 
 const createRule = ESLintUtils.RuleCreator(
   () => `https://www.paulhe.de/blog/next-route-params-eslint-rule`,

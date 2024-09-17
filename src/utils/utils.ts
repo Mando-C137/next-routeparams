@@ -1,17 +1,17 @@
-import { AST_NODE_TYPES } from "@typescript-eslint/types";
+import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import type { MyRuleContext } from "../rules/enforce-route-params";
+import ts, { type SourceFile } from "typescript";
 import type {
+  TSPropertySignature,
   Parameter,
-  TSTypeAnnotation,
+  TypeElement,
   TSTypeLiteral,
   TSTypeReference,
-  TypeElement,
-  FunctionExpression,
+  TSTypeAnnotation,
   ArrowFunctionExpression,
+  FunctionExpression,
   FunctionDeclaration,
 } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
-import ts from "typescript";
-import type { SourceFile } from "typescript";
 
 const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
   "params" as const,
@@ -190,7 +190,7 @@ function reportWrongParameterIssue(
   data: { name: string | null; type: "string" | "string[]" },
 ) {
   context.report({
-    node: paramsTypeNode,
+    loc: paramsTypeNode.loc,
     messageId: "issue:isWrongParameterType",
     data,
     fix: (fixer) => fixer.replaceTextRange(wrongTypeRange!, data.type),
@@ -204,12 +204,7 @@ function validateFirstParameter(
 ) {
   paramsType.members
     .filter(
-      (
-        member,
-      ): member is typeof member & {
-        type: AST_NODE_TYPES.TSPropertySignature;
-        key: { type: AST_NODE_TYPES.Identifier };
-      } =>
+      (member): member is TSPropertySignature & { key: { name: string } } =>
         member.type === AST_NODE_TYPES.TSPropertySignature &&
         member.key.type === AST_NODE_TYPES.Identifier &&
         !ALLOWED_PROPS_FOR_ROUTECOMPONENT.includes(
@@ -220,7 +215,7 @@ function validateFirstParameter(
       const typeAnnotationRange =
         member.typeAnnotation?.range[1] ?? member.key.range[1];
       context.report({
-        node: member,
+        loc: member.loc,
         messageId: "issue:forbiddenPropertyKey",
         data: { key: member.key.name },
         fix: (fixer) =>
@@ -238,7 +233,7 @@ function findReferencedType(
 ) {
   if (typeReference.typeName.type !== AST_NODE_TYPES.Identifier) {
     context.report({
-      node: typeReference,
+      loc: typeReference.loc,
       messageId: "issue:isNoLiteral",
     });
     return null;
@@ -253,7 +248,7 @@ function findReferencedType(
     node.typeAnnotation.type !== AST_NODE_TYPES.TSTypeLiteral
   ) {
     context.report({
-      node: typeReference,
+      loc: typeReference.loc,
       messageId: "issue:isNoLiteral",
     });
     return null;
@@ -297,7 +292,7 @@ function validateParamsMember(
   if (!isExplicitlyTypedType) {
     // report an problem here definitely => must be a TSPropertySignature type
     context.report({
-      node: paramsMember,
+      loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
     return;
@@ -333,7 +328,7 @@ function validateParamsMember(
   );
   if (unAllowedParams.length > 0) {
     context.report({
-      node: paramsMember.typeAnnotation,
+      loc: paramsMember.typeAnnotation.loc,
       messageId: "issue:unknown-parameter",
       data: { name: unAllowedParams[0]!.name },
       fix: (fixer) =>
@@ -375,7 +370,7 @@ function validateParamsMember(
   const areNotAllLiteral = params.filter((param) => param.isLiteral === false);
   if (areNotAllLiteral.length > 0) {
     context.report({
-      node: paramsMember,
+      loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
   }
@@ -401,7 +396,7 @@ function validateSearchParamsMember(
   }
   function reportWrongSearchParamsTypeIssue(node: TSTypeAnnotation) {
     context.report({
-      node: searchParamsMember!,
+      loc: searchParamsMember!.loc,
       messageId: "issue:wrong-searchParams-type",
       fix: (fixer) =>
         fixer.replaceTextRange(node.range, correctSearchParamsTypeAnnotation),
@@ -537,11 +532,11 @@ export function handleGenerateStaticParamsFunction(
   const returnType = functionNode.returnType;
   if (returnType == null) {
     context.report({
-      node: functionNode,
+      loc: functionNode.loc,
       messageId: "issue:no-returntype",
       fix: (fixer) =>
-        fixer.insertTextBefore(
-          functionNode.body,
+        fixer.insertTextBeforeRange(
+          functionNode.body.range,
           `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
         ),
     });
@@ -560,11 +555,11 @@ export function handleGenerateStaticParamsFunction(
 
   if (!isArray) {
     context.report({
-      node: functionNode,
+      loc: functionNode.loc,
       messageId: "issue:wrong-returntype",
       fix: (fixer) =>
-        fixer.replaceText(
-          returnType,
+        fixer.replaceTextRange(
+          returnType.range,
           `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
         ),
     });
@@ -592,11 +587,11 @@ export function handleGenerateStaticParamsFunction(
         return;
       } else {
         context.report({
-          node: functionNode,
+          loc: functionNode.loc,
           messageId: "issue:isNoLiteral",
           fix: (fixer) =>
-            fixer.replaceText(
-              returnType,
+            fixer.replaceTextRange(
+              returnType.range,
               `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
             ),
         });
@@ -605,11 +600,11 @@ export function handleGenerateStaticParamsFunction(
     }
     default: {
       context.report({
-        node: functionNode,
+        loc: functionNode.loc,
         messageId: "issue:isNoLiteral",
         fix: (fixer) =>
-          fixer.replaceText(
-            returnType,
+          fixer.replaceTextRange(
+            returnType.range,
             `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
           ),
       });
@@ -647,7 +642,7 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   );
   if (unAllowedParams.length > 0) {
     context.report({
-      node: paramsMember,
+      loc: paramsMember.loc,
       messageId: "issue:unknown-parameter",
       data: { name: unAllowedParams[0]!.name },
       fix: (fixer) =>
@@ -696,7 +691,7 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   const areNotAllLiteral = params.filter((param) => param.isLiteral === false);
   if (areNotAllLiteral.length > 0) {
     context.report({
-      node: paramsMember,
+      loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
     return;
@@ -709,7 +704,7 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
     );
     if (typeInUhmParams == null || typeInUhmParams.optional) {
       context.report({
-        node: paramsMember,
+        loc: paramsMember.loc,
         messageId: "issue:isNoOptionalParam",
         data: { name: requiredByFileName.name },
         fix: (fixer) =>
