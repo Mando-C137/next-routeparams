@@ -30,7 +30,17 @@ Add `next-route-params` to the plugins section of your ESLint configuration file
 
 ## Rule Details
 
-The `next-route-params/validate-params` rule checks that only the correct parameters are used in your Next.js routes. This rule uses the file-based routing system of Next.js to determine the allowed parameters for each route.
+The `next-route-params/enforce-route-params` rule checks that only the correct parameters are used in your Next.js routes. This rule uses the file-based routing system of Next.js to determine the allowed parameters for each route.
+
+ <!-- begin auto-generated rules list -->
+
+🔧 Automatically fixable by the [`--fix` CLI option](https://eslint.org/docs/user-guide/command-line-interface#--fix).
+
+| Name                                                       | Description                                                          | 🔧 |
+| :--------------------------------------------------------- | :------------------------------------------------------------------- | :- |
+| [enforce-route-params](docs/rules/enforce-route-params.md) | enforce correct route parameters built by Next.js' file based routes | 🔧 |
+
+<!-- end auto-generated rules list -->
 
 ### Options
 

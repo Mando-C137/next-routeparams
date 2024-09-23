@@ -466,12 +466,29 @@ function validateSearchParamsMember(
   }
 }
 
-export const createTSTypeForGenerateStaticParams = (
+const createTSTypeForGenerateStaticParams = (
+  async: boolean,
   fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
-) =>
-  ts.factory.createArrayTypeNode(
+) => {
+  const fileBasedReturnType = ts.factory.createArrayTypeNode(
     createInnerTSTypeForGenerateStaticParams(fileBasedParameters),
   );
+  if (async) {
+    return ts.factory.createTypeReferenceNode(
+      ts.factory.createIdentifier("Promise"),
+      [fileBasedReturnType],
+    );
+  }
+  return fileBasedReturnType;
+};
+
+const createTSTypeForGenerateStaticParamsAsString = (
+  async: boolean,
+  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
+) =>
+  `${getStringRepresentation(
+    createTSTypeForGenerateStaticParams(async, fileBasedParameters),
+  )} `;
 
 export const createInnerTSTypeForGenerateStaticParams = (
   fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
@@ -530,27 +547,62 @@ export function handleGenerateStaticParamsFunction(
   context: MyRuleContext,
 ) {
   const returnType = functionNode.returnType;
+  //check if the return type is Promise<T>
+
   if (returnType == null) {
-    context.report({
-      loc: functionNode.loc,
-      messageId: "issue:no-returntype",
-      fix: (fixer) =>
-        fixer.insertTextBeforeRange(
-          functionNode.body.range,
-          `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
-        ),
-    });
+    const arrowToken = context.sourceCode.getFirstToken(
+      functionNode,
+      (token) => token.value === "=>",
+    );
+    if (
+      functionNode.type === AST_NODE_TYPES.ArrowFunctionExpression &&
+      arrowToken != null
+    ) {
+      context.report({
+        loc: functionNode.loc,
+        messageId: "issue:no-returntype",
+        fix: (fixer) =>
+          fixer.insertTextBeforeRange(
+            arrowToken.range,
+            ": " +
+              createTSTypeForGenerateStaticParamsAsString(
+                functionNode.async,
+                fileBasedParameters,
+              ),
+          ),
+      });
+    } else {
+      context.report({
+        loc: functionNode.loc,
+        messageId: "issue:no-returntype",
+        fix: (fixer) =>
+          fixer.insertTextBeforeRange(
+            functionNode.body.range,
+            ": " +
+              createTSTypeForGenerateStaticParamsAsString(
+                functionNode.async,
+                fileBasedParameters,
+              ),
+          ),
+      });
+    }
     return;
   }
 
   if (!("typeAnnotation" in returnType)) {
     return;
   }
-  const typeAnnotation = returnType.typeAnnotation;
+  const fullTypeAnnotation = returnType.typeAnnotation;
 
-  if (functionNode.async) {
-    return;
-  }
+  // take the T of Promise<T> if it is a Promise
+  const typeAnnotation =
+    fullTypeAnnotation.type === AST_NODE_TYPES.TSTypeReference &&
+    fullTypeAnnotation.typeName.type === AST_NODE_TYPES.Identifier &&
+    fullTypeAnnotation.typeName.name === "Promise" &&
+    fullTypeAnnotation.typeArguments?.params[0]
+      ? fullTypeAnnotation.typeArguments.params[0]
+      : fullTypeAnnotation;
+
   const isArray = typeAnnotation.type === AST_NODE_TYPES.TSArrayType;
 
   if (!isArray) {
@@ -560,7 +612,10 @@ export function handleGenerateStaticParamsFunction(
       fix: (fixer) =>
         fixer.replaceTextRange(
           returnType.range,
-          `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
+          `: ${createTSTypeForGenerateStaticParamsAsString(
+            functionNode.async,
+            fileBasedParameters,
+          )}`,
         ),
     });
     return;
@@ -592,7 +647,10 @@ export function handleGenerateStaticParamsFunction(
           fix: (fixer) =>
             fixer.replaceTextRange(
               returnType.range,
-              `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
+              createTSTypeForGenerateStaticParamsAsString(
+                functionNode.async,
+                fileBasedParameters,
+              ),
             ),
         });
         return;
@@ -605,7 +663,10 @@ export function handleGenerateStaticParamsFunction(
         fix: (fixer) =>
           fixer.replaceTextRange(
             returnType.range,
-            `: ${getStringRepresentation(createTSTypeForGenerateStaticParams(fileBasedParameters))}`,
+            createTSTypeForGenerateStaticParamsAsString(
+              functionNode.async,
+              fileBasedParameters,
+            ),
           ),
       });
       return;
@@ -671,7 +732,6 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
       name: mustBeString.name,
       type: "string",
     });
-
     return;
   }
 
@@ -684,7 +744,6 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
       name: mustBeStringArray.name,
       type: "string[]",
     });
-
     return;
   }
 

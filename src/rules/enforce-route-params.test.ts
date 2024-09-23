@@ -35,7 +35,7 @@ const allCases = {
                 return null;
                 }
 
-                export const generateStaticParams = async function(parameters : {params : { id : string}}): Promise<{ id: string; reviewId?: string}[]> {
+                export const generateStaticParams = async function(parameters : {params : { id : string}}): Promise<{ id?: string; reviewId: string}[]> {
                   return null;
               }
                 `,
@@ -106,6 +106,15 @@ const allCases = {
       name: "A correct params type for generateMetadata is validated",
       code: `export function generateMetadata(parameters : 
       { params: { id: string, other: string[] }, searchParams: { [key: string]: string | string[] | undefined } }) { return null; } `,
+      filename: "src/app/movies/[id]/[...other]/page.tsx",
+    },
+    {
+      name: "Returning a Promise from generateStaticParams is allowed",
+      code: `export const generateStaticParams = async function (): Promise<
+      { id?: string; other: string[] }[]
+    > {
+        return [{ other: ["hallo"] }];
+    };`,
       filename: "src/app/movies/[id]/[...other]/page.tsx",
     },
   ],
@@ -459,11 +468,11 @@ const allCases = {
     },
     {
       name: "The generateStaticParams function must return an array of objects with the correct type",
-      code: `const generateStaticParams = function(parameters : {params : { id : string}}): { id: string; reviewId?: string} {return { id: "hallo"}}`,
+      code: `const generateStaticParams = function(parameters : {params : { id : string}}): { id: string; reviewId?: string} {return [{ id: "hallo"}]}`,
       output: `const generateStaticParams = function(parameters : {params : { id : string}}): {
     reviewId?: string;
     id: string;
-}[] {return { id: "hallo"}}`,
+}[]  {return [{ id: "hallo"}]}`,
       errors: [
         {
           messageId: "issue:wrong-returntype",
@@ -472,13 +481,13 @@ const allCases = {
       filename: "src/app/movies/[reviewId]/[id]/page.tsx",
     },
     {
-      name: "generateStaticParams as funtion works",
+      name: "generateStaticParams as function adds missing return type",
       code: `function generateStaticParams(){
       return []
       }`,
       output: `function generateStaticParams(): {
     id: string;
-}[]{
+}[] {
       return []
       }`,
       filename: "src/app/movies/[id]/page.tsx",
@@ -537,6 +546,76 @@ const allCases = {
       name: "generateMetadata as arrow function is not allowed to have current route param as optional",
       code: `export const generateMetadata  = ( props: { params : { id:number}} ) => []`,
       output: `export const generateMetadata  = ( props: { params : { id:string}} ) => []`,
+      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      errors: [
+        {
+          messageId: "issue:isWrongParameterType",
+        },
+      ],
+    },
+
+    {
+      name: "generateStaticParams as arrow function corrects output of wrond return type",
+      code: `export const generateStaticParams  = () : { id: number }[] => []`,
+      output: `export const generateStaticParams  = () : { id: string }[] => []`,
+      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      errors: [
+        {
+          messageId: "issue:isWrongParameterType",
+        },
+      ],
+    },
+
+    {
+      name: "generateMetadata as arrow function adds missing return type",
+      code: `export const generateStaticParams  = () => []`,
+      output: `export const generateStaticParams  = () : {
+    optionalFirst?: string;
+    optionalSecond?: string;
+    id: string;
+}[] => []`,
+      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      errors: [
+        {
+          messageId: "issue:no-returntype",
+        },
+      ],
+    },
+
+    {
+      name: "generateStaticParams as arrow function adds missing return type",
+      code: `export const generateStaticParams  = async () => []`,
+      output: `export const generateStaticParams  = async () : Promise<{
+    optionalFirst?: string;
+    optionalSecond?: string;
+    id: string;
+}[]> => []`,
+      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      errors: [
+        {
+          messageId: "issue:no-returntype",
+        },
+      ],
+    },
+    {
+      name: "async generateStaticParams as arrow function corrects wrong return type",
+      code: `export const generateStaticParams  = async (): Promise<{ id?: string }[]> => []`,
+      output: `export const generateStaticParams  = async (): Promise<{
+    optionalFirst?: string;
+    optionalSecond?: string;
+    id: string;
+}[]> => []`,
+      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      errors: [
+        {
+          messageId: "issue:isNoOptionalParam",
+        },
+      ],
+    },
+    {
+      name: "async generateStaticParams as normal function corrects wrong return type",
+      code: `export async function generateStaticParams(): Promise<{ id: number}[]> {return [];}`,
+      output: `export async function generateStaticParams(): Promise<{ id: string}[]> {return [];}`,
       filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
       errors: [
         {
