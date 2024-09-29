@@ -4,8 +4,9 @@ import {
   handleGenerateStaticParamsFunction,
   isAppRouterFile,
   readFileBasedParameters,
+  getFilename,
+  getFilePath,
 } from "../utils/utils";
-import path from "path";
 import { AST_NODE_TYPES, ESLintUtils } from "@typescript-eslint/utils";
 import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
 import type {
@@ -76,11 +77,10 @@ const enforceRouteParamsRule = createRule({
   ],
 
   create: (context, options) => {
-    const filename = context.physicalFilename
-      .split(path.sep)
-      .join(path.posix.sep);
+    const filePath = getFilePath(context);
+    const filename = getFilename(filePath);
 
-    const appDirectoryExists = appRouterFolderExists(filename);
+    const appDirectoryExists = appRouterFolderExists(filePath);
 
     if (!appDirectoryExists) {
       return {};
@@ -89,7 +89,7 @@ const enforceRouteParamsRule = createRule({
     if (!isAppRouterFileName) {
       return {};
     }
-    const fileBasedParameters = readFileBasedParameters(filename);
+    const fileBasedParameters = readFileBasedParameters(filePath);
 
     let nameOfDefaultExport: string | null = null;
 

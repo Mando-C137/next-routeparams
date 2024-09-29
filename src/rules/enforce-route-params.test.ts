@@ -641,8 +641,9 @@ const allTestFiles = [...new Set([...validtestFiles, ...invalidTestFiles])];
 describe("Your ESLint Rule", () => {
   beforeAll(() => {
     allTestFiles.forEach((testFilename) => {
-      const fileAlreadyExists = fs.existsSync(testFilename);
-      const directory = path.dirname(testFilename);
+      const normalizedTestFilename = path.normalize(testFilename);
+      const fileAlreadyExists = fs.existsSync(normalizedTestFilename);
+      const directory = path.dirname(normalizedTestFilename);
       const directoriesExistedBeforeTest = fs.existsSync(directory);
 
       if (!directoriesExistedBeforeTest) {
@@ -655,7 +656,7 @@ describe("Your ESLint Rule", () => {
   });
 
   afterAll(() => {
-    const appDirectory = path.join(__dirname, "../app");
+    const appDirectory = path.join(__dirname, path.normalize("../app"));
 
     if (fs.existsSync(appDirectory)) {
       fs.rmSync(appDirectory, { recursive: true, force: true });

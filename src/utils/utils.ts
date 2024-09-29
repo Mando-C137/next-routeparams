@@ -12,11 +12,15 @@ import type {
   FunctionDeclaration,
 } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type { MyRuleContext, Options } from "../rules/enforce-route-params";
+import { join, posix, sep } from "path";
+import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
 
 const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
   "params" as const,
   "searchParams" as const,
 ] as const;
+
+const WINDOWS_DRIVE_LETTER_REGEXP = /^[A-Za-z]:\\/;
 
 /**
  *
@@ -29,20 +33,11 @@ export function isAppRouterFile(filename: string) {
 
 /**
  *
- * @param fileName the filename containing the folders, the separator must be "/"
+ * @param filePath the filename containing the folders, the separator must be "/"
  * @returns true if a folder named "app" is found
  */
-export function appRouterFolderExists<TString extends string>(
-  fileName: TString,
-): TString extends `app/${string}` | `${string}/app/${string}`
-  ? true
-  : boolean {
-  return (fileName.startsWith("app/") ||
-    fileName.split("/").includes("app")) as TString extends
-    | `app/${string}`
-    | `${string}/app/${string}`
-    ? true
-    : boolean;
+export function appRouterFolderExists(filePath: string): boolean {
+  return filePath.split("/").includes("app");
 }
 
 /**
@@ -770,4 +765,22 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   }
 
   return { functionTypes: [], paramTypes: [] };
+};
+
+export const getFilename = (p: string) => posix.basename(p);
+
+const getPathFromRepositoryRoot = (fullPath: string, repositoryRoot: string) =>
+  fullPath.replace(join(repositoryRoot, sep), "");
+
+const toPosixPath = (p: string) => p.split(sep).join(posix.sep);
+
+const removeDriveLetter = (p: string) =>
+  p.replace(WINDOWS_DRIVE_LETTER_REGEXP, "");
+
+export const getFilePath = (context: RuleContext<string, unknown[]>) => {
+  const pathFromRoot = getPathFromRepositoryRoot(
+    context.physicalFilename,
+    context.cwd,
+  );
+  return toPosixPath(removeDriveLetter(pathFromRoot));
 };
