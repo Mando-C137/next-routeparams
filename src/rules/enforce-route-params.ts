@@ -78,7 +78,7 @@ const enforceRouteParamsRule = createRule({
 
   create: (context, options) => {
     const filePath = getFilePath(context);
-    const filename = getFilename(filePath);
+    const filename = getFilename(context);
 
     const appDirectoryExists = appRouterFolderExists(filePath);
 

@@ -19,7 +19,7 @@ const allCases = {
     {
       name: "generateStaticParams allows returntype of one param 'id' is working",
       code: `export const generateStaticParams = () : {id: string }[] => []`,
-      filename: "src/app/movies/[id]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
     },
     {
       name: "The params of the default exported function has all file-based parameter keys ",
@@ -35,30 +35,58 @@ const allCases = {
                   return null;
               }
                 `,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
     },
     {
       name: "The params of the default exported function has one of the file-based parameter keys ",
       code: "export default async function Page( parameters: { params: {id : string}}){return <div>Hallo</div>;}",
-      filename: "src\\app\\movies\\[id]\\[reviewId]\\page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
     },
     {
       name: "The default exported function has no function parameters",
       code: "export default function Page(){return <></>;}",
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
     },
     {
       name: "The default exported function's parameter are defined as a TypeReference within the file",
       code: `
             type Params = { params : { ker: string }};
             export default function Page(paramters : Params){return <></>;}`,
-      filename: "src/app/movies/[id]/[ker]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "[ker]", "page.tsx"),
     },
     {
       code: `
             export default function Page(parameters: { params: { id: string}, searchParams: { [key: string]: string | string[] | undefined } }) {
             return null;}`,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
     },
 
     {
@@ -69,7 +97,7 @@ const allCases = {
             }
             export default Lawl;
             `,
-      filename: "src/app/movies/[id]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
     },
     {
       name: "A function which is later default exported has the correct parameter type",
@@ -78,7 +106,14 @@ const allCases = {
             }
             export default Page;
             `,
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: "searchParams also allows Array<string> instead of string[]",
@@ -87,7 +122,14 @@ const allCases = {
             }
             export default Page;
             `,
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: ` The correct type of searchParams is validated`,
@@ -96,13 +138,27 @@ const allCases = {
             }
             export default Page;
             `,
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: "A correct params type for generateMetadata is validated",
-      code: `export function generateMetadata(parameters : 
+      code: `export function generateMetadata(parameters :
       { params: { id: string, other: string[] }, searchParams: { [key: string]: string | string[] | undefined } }) { return null; } `,
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: "Returning a Promise from generateStaticParams is allowed",
@@ -111,32 +167,46 @@ const allCases = {
     > {
         return [{ other: ["hallo"] }];
     };`,
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
 
     {
       name: `searchParams is not validated if it is set to false in options`,
       code: `
-            function Page(parameters: { searchParams: { sort: "asc" | "desc" } }) {
+            function Page(parameters: { searchParams: { sort: "asc" | "desc" } }) {      
               return null;
             }
             export default Page;
       `,
       options: [{ searchParams: false }],
-      filename: "src/app/page.tsx",
+      filename: path.join("src", "app", "page.tsx"),
     },
   ],
   invalid: [
     {
       name: "Replace wrong parameter type of route-param in TSTypeLiteral",
       code: `
-            export default async function Page(parameters: { params: { id: number } }) {
+            export default async function Page(parameters: { params: { id: number } }) { 
               return <div>Hallo</div>;
             }
             `,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
       output: `
-            export default async function Page(parameters: { params: { id: string } }) {
+            export default async function Page(parameters: { params: { id: string } }) { 
               return <div>Hallo</div>;
             }
             `,
@@ -159,7 +229,14 @@ const allCases = {
               return <></>;
             }
             `,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
       errors: [{ messageId: "issue:unknown-parameter", data: { name: "ids" } }],
     },
     {
@@ -170,7 +247,14 @@ const allCases = {
       output: `
             export default function Page(parameters: { params: { id: string, reviewId: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
             return null;}`,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
       errors: [
         { messageId: "issue:unknown-parameter", data: { name: "idBang" } },
       ],
@@ -181,7 +265,14 @@ const allCases = {
             export default function Page(paramters : { params : {iasd: string, id: string }}){return <></>;}`,
       output: `
             export default function Page(paramters : { params : { id: string, reviewId: string }}){return <></>;}`,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
       errors: [
         { messageId: "issue:unknown-parameter", data: { name: "iasd" } },
       ],
@@ -202,7 +293,14 @@ const allCases = {
             }) {
               return null;
             }`,
-      filename: "src/app/movies/[id]/[reviewId]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:unknown-parameter",
@@ -224,7 +322,7 @@ const allCases = {
             }) {
               return null;
             }`,
-      filename: "src/app/page.tsx",
+      filename: path.join("src", "app", "page.tsx"),
       errors: [
         {
           messageId: "issue:unknown-parameter",
@@ -246,7 +344,7 @@ const allCases = {
             }
             export default Page;
             `,
-      filename: "src/app/movies/[slug]/page.tsx",
+      filename: path.join("src", "app", "movies", "[slug]", "page.tsx"),
       errors: [
         {
           messageId: "issue:unknown-parameter",
@@ -272,7 +370,7 @@ const allCases = {
           data: { name: "lawl" },
         },
       ],
-      filename: "src/app/movies/[userId]/page.tsx",
+      filename: path.join("src", "app", "movies", "[userId]", "page.tsx"),
       output: `const Page = ({
         params: { userId },
       }: {
@@ -295,7 +393,7 @@ const allCases = {
         return null;
       };
       export default Page;`,
-      filename: "src\\app\\movies\\[userId]\\page.tsx",
+      filename: path.join("src", "app", "movies", "[userId]", "page.tsx"),
       output: `
             function Page  ({
         params: { userId },
@@ -321,7 +419,7 @@ const allCases = {
         return null;
       };
       export default Page;`,
-      filename: "src\\app\\movies\\[userId]\\page.tsx",
+      filename: path.join("src", "app", "movies", "[userId]", "page.tsx"),
       output: `
             const Page = ({
         params: { userId },
@@ -354,7 +452,14 @@ const allCases = {
           data: { name: "other", type: "string[]" },
         },
       ],
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: "Replace type of param (TSTypeLiteral) in TSTypeReference with catchAll-param",
@@ -374,7 +479,7 @@ const allCases = {
           data: { name: "ids", type: "string[]" },
         },
       ],
-      filename: "src/app/movies/[...ids]/page.tsx",
+      filename: path.join("src", "app", "movies", "[...ids]", "page.tsx"),
     },
     {
       name: "Replace type of param (number) in TSTypeReference with catchAll-param",
@@ -388,7 +493,14 @@ const allCases = {
             }
             export default Page;
             `,
-      filename: "src/app/movies/[id]/[...other]/layout.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "layout.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isWrongParameterType",
@@ -418,7 +530,7 @@ const allCases = {
           data: { name: "otherTypo" },
         },
       ],
-      filename: "src/app/[...other]/layout.tsx",
+      filename: path.join("src", "app", "[...other]", "layout.tsx"),
     },
     {
       name: "Remove forbidden PropertyKey in TSTypeReference",
@@ -434,7 +546,7 @@ const allCases = {
           data: { key: "losterKey" },
         },
       ],
-      filename: "src/app/movies/[id]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
     },
     {
       name: `The type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
@@ -453,7 +565,14 @@ const allCases = {
           messageId: "issue:wrong-searchParams-type",
         },
       ],
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: `The correct type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
@@ -472,7 +591,14 @@ const allCases = {
           messageId: "issue:wrong-searchParams-type",
         },
       ],
-      filename: "src/app/movies/[id]/[...other]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[...other]",
+        "page.tsx",
+      ),
     },
     {
       name: "The generateStaticParams function must return an array of objects with the correct type",
@@ -486,7 +612,14 @@ const allCases = {
           messageId: "issue:wrong-returntype",
         },
       ],
-      filename: "src/app/movies/[reviewId]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[reviewId]",
+        "[id]",
+        "page.tsx",
+      ),
     },
     {
       name: "generateStaticParams as function adds missing return type",
@@ -498,7 +631,7 @@ const allCases = {
 }[] {
       return []
       }`,
-      filename: "src/app/movies/[id]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
       errors: [
         {
           messageId: "issue:no-returntype",
@@ -511,7 +644,7 @@ const allCases = {
       output: `export const generateStaticParams = () : {
     id: string;
 }[] => []`,
-      filename: "src/app/movies/[id]/page.tsx",
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
       errors: [
         {
           messageId: "issue:unknown-parameter",
@@ -526,7 +659,15 @@ const allCases = {
     optionalSecond?: string;
     id: string;
 }[] => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isNoOptionalParam",
@@ -542,7 +683,15 @@ const allCases = {
     optionalSecond?: string;
     id: string;
 }[] => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isNoOptionalParam",
@@ -554,7 +703,15 @@ const allCases = {
       name: "generateMetadata as arrow function is not allowed to have current route param as optional",
       code: `export const generateMetadata  = ( props: { params : { id:number}} ) => []`,
       output: `export const generateMetadata  = ( props: { params : { id:string}} ) => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isWrongParameterType",
@@ -566,7 +723,15 @@ const allCases = {
       name: "generateStaticParams as arrow function corrects output of wrond return type",
       code: `export const generateStaticParams  = () : { id: number }[] => []`,
       output: `export const generateStaticParams  = () : { id: string }[] => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isWrongParameterType",
@@ -582,7 +747,15 @@ const allCases = {
     optionalSecond?: string;
     id: string;
 }[] => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:no-returntype",
@@ -598,7 +771,15 @@ const allCases = {
     optionalSecond?: string;
     id: string;
 }[]> => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:no-returntype",
@@ -613,7 +794,15 @@ const allCases = {
     optionalSecond?: string;
     id: string;
 }[]> => []`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isNoOptionalParam",
@@ -624,7 +813,15 @@ const allCases = {
       name: "async generateStaticParams as normal function corrects wrong return type",
       code: `export async function generateStaticParams(): Promise<{ id: number}[]> {return [];}`,
       output: `export async function generateStaticParams(): Promise<{ id: string}[]> {return [];}`,
-      filename: "src/app/movies/[optionalFirst]/[optionalSecond]/[id]/page.tsx",
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
       errors: [
         {
           messageId: "issue:isWrongParameterType",

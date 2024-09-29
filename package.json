@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "jest && tsc",
-    "test": "jest ",
+    "test": "jest",
     "lint": "eslint src && prettier src --check",
     "lint:fix": "eslint --fix src && prettier src --write",
     "update:eslint-docs": "eslint-doc-generator"

@@ -12,15 +12,13 @@ import type {
   FunctionDeclaration,
 } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type { MyRuleContext, Options } from "../rules/enforce-route-params";
-import { join, posix, sep } from "path";
+import path, { posix } from "path";
 import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
 
 const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
   "params" as const,
   "searchParams" as const,
 ] as const;
-
-const WINDOWS_DRIVE_LETTER_REGEXP = /^[A-Za-z]:\\/;
 
 /**
  *
@@ -33,30 +31,29 @@ export function isAppRouterFile(filename: string) {
 
 /**
  *
- * @param filePath the filename containing the folders, the separator must be "/"
+ * @param dirname the dirname containing the folders, the separator must be "/"
  * @returns true if a folder named "app" is found
  */
-export function appRouterFolderExists(filePath: string): boolean {
-  return filePath.split("/").includes("app");
+export function appRouterFolderExists(dirname: string): boolean {
+  return dirname.split(posix.sep).includes("app");
 }
 
 /**
  *
  *
- * @param fileName the filename containing the folders, the separator must be "/"
+ * @param dirname the dirname containing the folders, the separator must be "/"
  * @returns a list of the dynamic parameters and if if they are catch all parameters
  */
 export function readFileBasedParameters(
-  fileName: string,
+  dirname: string,
 ): { catchAll: boolean; name: string; current: boolean }[] {
-  const folders = fileName.split("/");
+  const folders = dirname.split(posix.sep);
 
   const appPosition = folders.findIndex((folder) => folder === "app");
   if (appPosition === -1) {
     return [];
   }
-  const foldersWithoutFileName = folders.slice(appPosition, folders.length - 1);
-  const result = foldersWithoutFileName
+  const result = folders
     .filter((folder) => folder.startsWith("[") && folder.endsWith("]"))
     .map((folder) => {
       const catchAll = folder.startsWith("[...");
@@ -64,8 +61,7 @@ export function readFileBasedParameters(
       return { catchAll, name, current: false };
     });
 
-  const lastFolderName =
-    foldersWithoutFileName[foldersWithoutFileName.length - 1];
+  const lastFolderName = folders[folders.length - 1];
   if (lastFolderName?.endsWith("]")) {
     result[result.length - 1]!.current = true;
   }
@@ -767,20 +763,12 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   return { functionTypes: [], paramTypes: [] };
 };
 
-export const getFilename = (p: string) => posix.basename(p);
+export const getFilename = (context: RuleContext<string, unknown[]>) =>
+  path.basename(context.filename);
 
-const getPathFromRepositoryRoot = (fullPath: string, repositoryRoot: string) =>
-  fullPath.replace(join(repositoryRoot, sep), "");
-
-const toPosixPath = (p: string) => p.split(sep).join(posix.sep);
-
-const removeDriveLetter = (p: string) =>
-  p.replace(WINDOWS_DRIVE_LETTER_REGEXP, "");
+const toPosixPath = (p: string) => p.split(path.sep).join(posix.sep);
 
 export const getFilePath = (context: RuleContext<string, unknown[]>) => {
-  const pathFromRoot = getPathFromRepositoryRoot(
-    context.physicalFilename,
-    context.cwd,
-  );
-  return toPosixPath(removeDriveLetter(pathFromRoot));
+  // const pathFromRoot = path.dirname(context.filename);
+  return toPosixPath(path.dirname(context.filename));
 };

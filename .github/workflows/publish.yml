@@ -1,9 +1,8 @@
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - "*.*.*"
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -14,6 +13,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - run: npm lint
       - run: npm test
 
   publish-npm:
