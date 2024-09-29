@@ -1,5 +1,4 @@
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
-import type { MyRuleContext } from "../rules/enforce-route-params";
 import ts, { type SourceFile } from "typescript";
 import type {
   TSPropertySignature,
@@ -12,6 +11,7 @@ import type {
   FunctionExpression,
   FunctionDeclaration,
 } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+import type { MyRuleContext, Options } from "../rules/enforce-route-params";
 
 const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
   "params" as const,
@@ -78,13 +78,15 @@ export function readFileBasedParameters(
   return result;
 }
 
-export function handleProps({
+export function handleFunctionParameters({
   props,
   context,
+  options,
   fileBasedParameters,
 }: {
   props: Parameter;
   fileBasedParameters: ReturnType<typeof readFileBasedParameters>;
+  options: Readonly<Options>;
   context: MyRuleContext;
 }) {
   // no type annotation => could mean that is not using noImplicitAny
@@ -95,7 +97,12 @@ export function handleProps({
 
   switch (innerTypeAnnotation?.type) {
     case AST_NODE_TYPES.TSTypeLiteral:
-      validateFirstParameter(innerTypeAnnotation, context, fileBasedParameters);
+      validateFirstParameter(
+        innerTypeAnnotation,
+        context,
+        options,
+        fileBasedParameters,
+      );
       break;
     case AST_NODE_TYPES.TSTypeReference:
       const referencedTSTypeLiteral = findReferencedType(
@@ -106,6 +113,7 @@ export function handleProps({
         validateFirstParameter(
           referencedTSTypeLiteral,
           context,
+          options,
           fileBasedParameters,
         );
       }
@@ -200,6 +208,7 @@ function reportWrongParameterIssue(
 function validateFirstParameter(
   paramsType: TSTypeLiteral,
   context: MyRuleContext,
+  options: Readonly<Options>,
   fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
 ) {
   paramsType.members
@@ -223,7 +232,9 @@ function validateFirstParameter(
       });
     });
 
-  validateSearchParamsMember(paramsType, context);
+  if (options[0].searchParams) {
+    validateSearchParamsMember(paramsType, context);
+  }
   validateParamsMember(paramsType, context, fileBasedParameters);
 }
 
@@ -520,24 +531,6 @@ export function getStringRepresentation(typeNode: ts.TypeNode): string {
     );
 }
 
-export function handleMetadataFunction(
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
-  functionNode:
-    | ArrowFunctionExpression
-    | FunctionExpression
-    | FunctionDeclaration,
-  context: MyRuleContext,
-) {
-  const props = functionNode.params[0];
-  if (props) {
-    handleProps({
-      props,
-      fileBasedParameters,
-      context,
-    });
-  }
-}
-
 export function handleGenerateStaticParamsFunction(
   fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
   functionNode:
@@ -564,11 +557,10 @@ export function handleGenerateStaticParamsFunction(
         fix: (fixer) =>
           fixer.insertTextBeforeRange(
             arrowToken.range,
-            ": " +
-              createTSTypeForGenerateStaticParamsAsString(
-                functionNode.async,
-                fileBasedParameters,
-              ),
+            `: ${createTSTypeForGenerateStaticParamsAsString(
+              functionNode.async,
+              fileBasedParameters,
+            )}`,
           ),
       });
     } else {
@@ -578,11 +570,10 @@ export function handleGenerateStaticParamsFunction(
         fix: (fixer) =>
           fixer.insertTextBeforeRange(
             functionNode.body.range,
-            ": " +
-              createTSTypeForGenerateStaticParamsAsString(
-                functionNode.async,
-                fileBasedParameters,
-              ),
+            `: ${createTSTypeForGenerateStaticParamsAsString(
+              functionNode.async,
+              fileBasedParameters,
+            )}`,
           ),
       });
     }

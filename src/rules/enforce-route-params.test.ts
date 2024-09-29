@@ -1,11 +1,7 @@
-import rule from "./enforce-route-params";
+import rule, { Options, type MessageIds } from "./enforce-route-params";
 import path from "path";
 import fs from "fs";
 import { correctSearchParamsTypeAnnotation } from "../utils/utils";
-import type {
-  InferMessageIdsTypeFromRule,
-  InferOptionsTypeFromRule,
-} from "@typescript-eslint/utils/eslint-utils";
 import { RuleTester, type RunTests } from "@typescript-eslint/rule-tester";
 import parser from "@typescript-eslint/parser";
 
@@ -116,6 +112,18 @@ const allCases = {
         return [{ other: ["hallo"] }];
     };`,
       filename: "src/app/movies/[id]/[...other]/page.tsx",
+    },
+
+    {
+      name: `searchParams is not validated if it is set to false in options`,
+      code: `
+            function Page(parameters: { searchParams: { sort: "asc" | "desc" } }) {
+              return null;
+            }
+            export default Page;
+      `,
+      options: [{ searchParams: false }],
+      filename: "src/app/page.tsx",
     },
   ],
   invalid: [
@@ -429,7 +437,7 @@ const allCases = {
       filename: "src/app/movies/[id]/page.tsx",
     },
     {
-      name: `The correct type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
+      name: `The type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
       code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: { [key: string]: string | string[] | number } }) {
               return  null;
             }
@@ -624,10 +632,7 @@ const allCases = {
       ],
     },
   ],
-} satisfies RunTests<
-  InferMessageIdsTypeFromRule<typeof rule>,
-  InferOptionsTypeFromRule<typeof rule>
->;
+} satisfies RunTests<MessageIds, Options>;
 
 const validtestFiles = allCases.valid.map(({ filename }) => filename);
 const invalidTestFiles = allCases.invalid.map(({ filename }) => filename);

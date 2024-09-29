@@ -1,13 +1,17 @@
 import {
   appRouterFolderExists,
-  handleProps,
+  handleFunctionParameters,
   handleGenerateStaticParamsFunction,
-  handleMetadataFunction,
   isAppRouterFile,
   readFileBasedParameters,
 } from "../utils/utils";
 import path from "path";
 import { AST_NODE_TYPES, ESLintUtils } from "@typescript-eslint/utils";
+import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
+import type {
+  InferMessageIdsTypeFromRule,
+  InferOptionsTypeFromRule,
+} from "@typescript-eslint/utils/eslint-utils";
 
 const createRule = ESLintUtils.RuleCreator(
   () => `https://www.paulhe.de/blog/next-route-params-eslint-rule`,
@@ -19,9 +23,11 @@ const METADATA_FUNCTIONS = [
 ] as ReadonlyArray<string>;
 const GENERATE_STATIC_PARAMS_FUNCTION_NAME = "generateStaticParams";
 
-export type MyRuleContext = Parameters<
-  (typeof enforceRouteParamsRule)["create"]
->[0];
+export type Options = InferOptionsTypeFromRule<typeof enforceRouteParamsRule>;
+export type MessageIds = InferMessageIdsTypeFromRule<
+  typeof enforceRouteParamsRule
+>;
+export type MyRuleContext = RuleContext<MessageIds, Options>;
 
 const enforceRouteParamsRule = createRule({
   name: "enforce-route-params",
@@ -44,13 +50,32 @@ const enforceRouteParamsRule = createRule({
         "The function must specify a correct returntype",
       "issue:isNoOptionalParam": "The param {{ name }} must not be optional",
     },
-    schema: [],
+    schema: [
+      {
+        type: "object",
+        properties: {
+          searchParams: {
+            type: "boolean",
+            enum: [true, false],
+            default: true,
+            description:
+              "If true, also strictly validates searchParams and enforces that the searchParams parameter is of type { [key: string]: string | string[] | undefined }",
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
+
     fixable: "code",
     hasSuggestions: false,
   },
-  defaultOptions: [],
+  defaultOptions: [
+    {
+      searchParams: true,
+    },
+  ],
 
-  create: (context) => {
+  create: (context, options) => {
     const filename = context.physicalFilename
       .split(path.sep)
       .join(path.posix.sep);
@@ -78,9 +103,15 @@ const enforceRouteParamsRule = createRule({
           );
         } else if (
           node.id?.name &&
-          METADATA_FUNCTIONS.includes(node.id?.name)
+          METADATA_FUNCTIONS.includes(node.id?.name) &&
+          node.params[0] != null
         ) {
-          handleMetadataFunction(fileBasedParameters, node, context);
+          handleFunctionParameters({
+            fileBasedParameters,
+            context,
+            options,
+            props: node.params[0],
+          });
         }
       },
 
@@ -97,8 +128,16 @@ const enforceRouteParamsRule = createRule({
               node.init,
               context,
             );
-          } else if (METADATA_FUNCTIONS.includes(node.id?.name)) {
-            handleMetadataFunction(fileBasedParameters, node.init, context);
+          } else if (
+            METADATA_FUNCTIONS.includes(node.id?.name) &&
+            node.init.params[0] != null
+          ) {
+            handleFunctionParameters({
+              fileBasedParameters,
+              context,
+              options,
+              props: node.init.params[0],
+            });
           }
         }
       },
@@ -117,9 +156,10 @@ const enforceRouteParamsRule = createRule({
           return;
         }
 
-        handleProps({
+        handleFunctionParameters({
           fileBasedParameters,
           context,
+          options,
           props: node.declaration.params[0],
         });
       },
@@ -143,9 +183,10 @@ const enforceRouteParamsRule = createRule({
               initNode.params[0]
             ) {
               // Add your custom logic for the function node here
-              handleProps({
+              handleFunctionParameters({
                 fileBasedParameters: fileBasedParameters,
                 context,
+                options,
                 props: initNode.params[0],
               });
             }
@@ -153,9 +194,10 @@ const enforceRouteParamsRule = createRule({
             node?.type === AST_NODE_TYPES.FunctionDeclaration &&
             node.params[0]
           ) {
-            handleProps({
+            handleFunctionParameters({
               fileBasedParameters: fileBasedParameters,
               context,
+              options,
               props: node.params[0],
             });
           }
