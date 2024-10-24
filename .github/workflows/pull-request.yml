@@ -1,0 +1,35 @@
+name: Pull Request
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+
+    #   - name: Upload test results
+    #     if: always()
+    #     uses: actions/upload-artifact@v3
+    #     with:
+    #       name: test-results
+    #      path: ./test-results # Adjust this if you're saving test results to a specific directory

@@ -176,7 +176,6 @@ const allCases = {
         "page.tsx",
       ),
     },
-
     {
       name: `searchParams is not validated if it is set to false in options`,
       code: `
@@ -187,6 +186,19 @@ const allCases = {
       `,
       options: [{ searchParams: false }],
       filename: path.join("src", "app", "page.tsx"),
+    },
+    {
+      name: `layout file can have a children as Props`,
+      code: `
+            function Layout(parameters: { searchParams: { sort: "asc" | "desc" }  ,
+            children: React.ReactNode }
+            ) {
+              return null;
+            }
+            export default Layout;
+      `,
+      options: [{ searchParams: false }],
+      filename: path.join("src", "app", "layout.tsx"),
     },
   ],
   invalid: [
@@ -225,7 +237,10 @@ const allCases = {
             }
             `,
       output: `
-            export default function Page(parameters: { params: { id: string, reviewId: string } }) {
+            export default function Page(parameters: { params: {
+    id: string;
+    reviewId: string;
+} }) {
               return <></>;
             }
             `,
@@ -245,7 +260,10 @@ const allCases = {
             export default function Page(parameters: { params: { idBang: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
             return null;}`,
       output: `
-            export default function Page(parameters: { params: { id: string, reviewId: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
+            export default function Page(parameters: { params: {
+    id: string;
+    reviewId: string;
+}, searchParams: { [key: string]: string | string[] | undefined } }) {
             return null;}`,
       filename: path.join(
         "src",
@@ -264,7 +282,10 @@ const allCases = {
       code: `
             export default function Page(paramters : { params : {iasd: string, id: string }}){return <></>;}`,
       output: `
-            export default function Page(paramters : { params : { id: string, reviewId: string }}){return <></>;}`,
+            export default function Page(paramters : { params : {
+    id: string;
+    reviewId: string;
+}}){return <></>;}`,
       filename: path.join(
         "src",
         "app",
@@ -289,7 +310,10 @@ const allCases = {
       output: `export default async function ReviewPage(
                   parameters
             : {
-              params: { id: string, reviewId: string };
+              params: {
+    id: string;
+    reviewId: string;
+};
             }) {
               return null;
             }`,
@@ -339,7 +363,9 @@ const allCases = {
             export default Page;
             `,
       output: `
-            const Page = ({ params }: { params: { slug: string } }) => {
+            const Page = ({ params }: { params: {
+    slug: string;
+} }) => {
               return <div>commentary</div>;
             }
             export default Page;
@@ -357,8 +383,11 @@ const allCases = {
       code: `const Page = ({
         params: { userId },
       }: {
-        params: { userId: string; lawl: string };
-      }) => {
+        params: {
+    userId: string;
+    lawl: string
+}
+}) => {
         return (<div>Hallo</div>)
       };
 
@@ -374,8 +403,10 @@ const allCases = {
       output: `const Page = ({
         params: { userId },
       }: {
-        params: { userId: string };
-      }) => {
+        params: {
+    userId: string;
+}
+}) => {
         return (<div>Hallo</div>)
       };
 
@@ -388,7 +419,10 @@ const allCases = {
             function Page  ({
         params: { userId },
       }: {
-        params: { userId: string; reviewId: string };
+        params: {
+   userId: string;
+   reviewId: string
+};
       })  {
         return null;
       };
@@ -398,7 +432,9 @@ const allCases = {
             function Page  ({
         params: { userId },
       }: {
-        params: { userId: string };
+        params: {
+    userId: string;
+};
       })  {
         return null;
       };
@@ -415,7 +451,10 @@ const allCases = {
       code: `
             const Page = ({
         params: { userId },
-      } : { params: { userId: string; reviewId: string }}) =>  {
+      } : { params: {
+    userId: string;
+    reviewId: string
+}}) =>  {
         return null;
       };
       export default Page;`,
@@ -423,7 +462,9 @@ const allCases = {
       output: `
             const Page = ({
         params: { userId },
-      } : { params: { userId: string }}) =>  {
+      } : { params: {
+    userId: string;
+}}) =>  {
         return null;
       };
       export default Page;`,
@@ -514,12 +555,16 @@ const allCases = {
     },
     {
       name: "Replace unknown parameter in TSTypeReference",
-      code: `function Page(parameters: { params: { otherTypo: string[] }}) {
+      code: `
+      function Page(parameters: { params: { otherTypo: string[] }}) {
               return  null;
             }
             export default Page;
             `,
-      output: `function Page(parameters: { params: { other: string[] }}) {
+      output: `
+      function Page(parameters: { params: {
+    other: string[];
+}}) {
               return  null;
             }
             export default Page;

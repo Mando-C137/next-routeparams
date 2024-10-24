@@ -1,5 +1,5 @@
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
-import ts, { type SourceFile } from "typescript";
+import ts from "typescript";
 import type {
   TSPropertySignature,
   Parameter,
@@ -11,13 +11,36 @@ import type {
   FunctionExpression,
   FunctionDeclaration,
 } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
-import type { MyRuleContext, Options } from "../rules/enforce-route-params";
+import type {
+  Context,
+  CustomContext,
+  FilebasedParams,
+  MyRuleContext,
+  Options,
+} from "../rules/enforce-route-params";
 import path, { posix } from "path";
 import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
+import {
+  createParamsTypeNodeStringWithColon,
+  SEARCHPARAMS_TYPE_NODE_STRING,
+  STRING_TYPE_NODE,
+  stringifyTypeNode,
+  wrapTypeWithArray,
+  wrapTypeWithPromise,
+} from "./types/typeGenerator";
 
-const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
-  "params" as const,
-  "searchParams" as const,
+const PARAMS_PROP_NAME = "params";
+const SEARCHPARAMS_PROP_NAME = "searchParams";
+const CHILDREN_PROP_NAME = "children";
+
+const ALLOWED_PROPS_FOR_PAGE = [
+  PARAMS_PROP_NAME,
+  SEARCHPARAMS_PROP_NAME,
+] as const;
+
+const ALLOWED_PROPS_FOR_LAYOUT = [
+  PARAMS_PROP_NAME,
+  CHILDREN_PROP_NAME,
 ] as const;
 
 /**
@@ -26,7 +49,38 @@ const ALLOWED_PROPS_FOR_ROUTECOMPONENT = [
  * @returns true if the filename is one of Next.js' app router files that accecpt paramaters ({@link https://nextjs.org/docs/app/api-reference/file-conventions})
  */
 export function isAppRouterFile(filename: string) {
-  return filename.endsWith("page.tsx") || filename.endsWith("layout.tsx");
+  return (
+    path.basename(filename) === "page.tsx" ||
+    path.basename(filename) === "layout.tsx"
+  );
+}
+export function getFilenameType(
+  filename: string,
+): "page" | "layout" | "template" | null {
+  switch (path.parse(filename).name) {
+    case "page":
+      return "page";
+    case "layout":
+      return "layout";
+    case "template":
+      return "template";
+    default:
+      return null;
+  }
+}
+type FileNameType = ReturnType<typeof getFilenameType>;
+
+function getAllowedPropsForFilenameType(fileType: FileNameType): Array<string> {
+  switch (fileType) {
+    case "page":
+      return [...ALLOWED_PROPS_FOR_PAGE];
+    case "layout":
+      return [...ALLOWED_PROPS_FOR_LAYOUT];
+    case "template":
+      return [...ALLOWED_PROPS_FOR_PAGE];
+    case null:
+      throw new Error("File type is not defined");
+  }
 }
 
 /**
@@ -73,12 +127,10 @@ export function handleFunctionParameters({
   props,
   context,
   options,
-  fileBasedParameters,
 }: {
   props: Parameter;
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>;
   options: Readonly<Options>;
-  context: MyRuleContext;
+  context: Context;
 }) {
   // no type annotation => could mean that is not using noImplicitAny
   if (!props || !("typeAnnotation" in props)) {
@@ -88,12 +140,7 @@ export function handleFunctionParameters({
 
   switch (innerTypeAnnotation?.type) {
     case AST_NODE_TYPES.TSTypeLiteral:
-      validateFirstParameter(
-        innerTypeAnnotation,
-        context,
-        options,
-        fileBasedParameters,
-      );
+      validateFirstParameter(innerTypeAnnotation, context, options);
       break;
     case AST_NODE_TYPES.TSTypeReference:
       const referencedTSTypeLiteral = findReferencedType(
@@ -101,56 +148,15 @@ export function handleFunctionParameters({
         context,
       );
       if (referencedTSTypeLiteral != null) {
-        validateFirstParameter(
-          referencedTSTypeLiteral,
-          context,
-          options,
-          fileBasedParameters,
-        );
+        validateFirstParameter(referencedTSTypeLiteral, context, options);
       }
   }
 }
 
-function createCorrectParamsType(slugs: { catchAll: boolean; name: string }[]) {
-  if (slugs.length === 0) {
-    return `: ${getStringRepresentation(
-      ts.factory.createTypeReferenceNode(
-        ts.factory.createIdentifier("Record"),
-        [
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
-        ],
-      ),
-    )}`;
-  }
-  return `: { ${slugs
-    .map((key) => `${key.name}: ${key.catchAll ? "string[]" : "string"}`)
-    .join(", ")} }`;
+export const correctSearchParamsTypeAnnotation = ` : ${
+  SEARCHPARAMS_TYPE_NODE_STRING
 }
-
-export const correctSearchParamsTypeAnnotation = ` : ${getStringRepresentation(
-  ts.factory.createTypeLiteralNode([
-    ts.factory.createIndexSignature(
-      undefined,
-      [
-        ts.factory.createParameterDeclaration(
-          undefined,
-          undefined,
-          ts.factory.createIdentifier("key"),
-          undefined,
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-        ),
-      ],
-      ts.factory.createUnionTypeNode([
-        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-        ts.factory.createArrayTypeNode(
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-        ),
-        ts.factory.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword),
-      ]),
-    ),
-  ]),
-)}` as const;
+` as const;
 
 function getTypeOfMember(member: TypeElement): "string" | "string[]" | "other" {
   if (
@@ -183,12 +189,12 @@ function getTypeOfMember(member: TypeElement): "string" | "string[]" | "other" {
 }
 
 function reportWrongParameterIssue(
-  context: MyRuleContext,
+  context: Context,
   paramsTypeNode: TypeElement | TSTypeLiteral,
   wrongTypeRange: [number, number] | null,
   data: { name: string | null; type: "string" | "string[]" },
 ) {
-  context.report({
+  context.ruleContext.report({
     loc: paramsTypeNode.loc,
     messageId: "issue:isWrongParameterType",
     data,
@@ -198,23 +204,22 @@ function reportWrongParameterIssue(
 
 function validateFirstParameter(
   paramsType: TSTypeLiteral,
-  context: MyRuleContext,
+  context: Context,
   options: Readonly<Options>,
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
 ) {
   paramsType.members
     .filter(
       (member): member is TSPropertySignature & { key: { name: string } } =>
         member.type === AST_NODE_TYPES.TSPropertySignature &&
         member.key.type === AST_NODE_TYPES.Identifier &&
-        !ALLOWED_PROPS_FOR_ROUTECOMPONENT.includes(
-          member.key.name as (typeof ALLOWED_PROPS_FOR_ROUTECOMPONENT)[number],
-        ),
+        !getAllowedPropsForFilenameType(
+          context.customContext.fileType,
+        ).includes(member.key.name),
     )
     .forEach((member) => {
       const typeAnnotationRange =
         member.typeAnnotation?.range[1] ?? member.key.range[1];
-      context.report({
+      context.ruleContext.report({
         loc: member.loc,
         messageId: "issue:forbiddenPropertyKey",
         data: { key: member.key.name },
@@ -226,22 +231,22 @@ function validateFirstParameter(
   if (options[0].searchParams) {
     validateSearchParamsMember(paramsType, context);
   }
-  validateParamsMember(paramsType, context, fileBasedParameters);
+  validateParamsMember(paramsType, context);
 }
 
 function findReferencedType(
   typeReference: TSTypeReference,
-  context: MyRuleContext,
+  { ruleContext }: Context,
 ) {
   if (typeReference.typeName.type !== AST_NODE_TYPES.Identifier) {
-    context.report({
+    ruleContext.report({
       loc: typeReference.loc,
       messageId: "issue:isNoLiteral",
     });
     return null;
   }
   const nameOfReferencedType = typeReference.typeName.name;
-  const node = context.sourceCode.scopeManager?.variables?.find(
+  const node = ruleContext.sourceCode.scopeManager?.variables?.find(
     (variable) =>
       variable.name === nameOfReferencedType && variable.isTypeVariable,
   )?.defs[0]?.node;
@@ -249,7 +254,7 @@ function findReferencedType(
     node?.type !== AST_NODE_TYPES.TSTypeAliasDeclaration ||
     node.typeAnnotation.type !== AST_NODE_TYPES.TSTypeLiteral
   ) {
-    context.report({
+    ruleContext.report({
       loc: typeReference.loc,
       messageId: "issue:isNoLiteral",
     });
@@ -258,16 +263,12 @@ function findReferencedType(
   return node.typeAnnotation;
 }
 
-function validateParamsMember(
-  paramsType: TSTypeLiteral,
-  context: MyRuleContext,
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
-) {
+function validateParamsMember(paramsType: TSTypeLiteral, context: Context) {
   const paramsMember = paramsType.members.find(
     (member) =>
       member.type === AST_NODE_TYPES.TSPropertySignature &&
       member.key.type === AST_NODE_TYPES.Identifier &&
-      member.key.name === ALLOWED_PROPS_FOR_ROUTECOMPONENT[0],
+      member.key.name === ALLOWED_PROPS_FOR_PAGE[0],
   );
 
   if (
@@ -293,7 +294,7 @@ function validateParamsMember(
       AST_NODE_TYPES.TSTypeLiteral;
   if (!isExplicitlyTypedType) {
     // report an problem here definitely => must be a TSPropertySignature type
-    context.report({
+    context.ruleContext.report({
       loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
@@ -324,27 +325,31 @@ function validateParamsMember(
     name: "key" in member && "name" in member.key ? member.key.name : null,
   }));
 
-  const actualParamNames = fileBasedParameters.map((param) => param.name);
+  const actualParamNames = context.customContext.fileBasedParameters.map(
+    (param) => param.name,
+  );
   const unAllowedParams = params.filter(
     (param) => param.name == null || !actualParamNames.includes(param.name),
   );
   if (unAllowedParams.length > 0) {
-    context.report({
+    context.ruleContext.report({
       loc: paramsMember.typeAnnotation.loc,
       messageId: "issue:unknown-parameter",
       data: { name: unAllowedParams[0]!.name },
       fix: (fixer) =>
         fixer.replaceTextRange(
           paramsMember.typeAnnotation!.range,
-          createCorrectParamsType(fileBasedParameters),
+          createParamsTypeNodeStringWithColon(
+            context.customContext.fileBasedParameters,
+          ),
         ),
     });
   }
-  const routeParams = fileBasedParameters
+  const routeParams = context.customContext.fileBasedParameters
     .filter((param) => !param.catchAll)
     .map((param) => param.name);
 
-  const catchAllParams = fileBasedParameters
+  const catchAllParams = context.customContext.fileBasedParameters
     .filter((param) => param.catchAll)
     .map((param) => param.name);
 
@@ -371,7 +376,7 @@ function validateParamsMember(
 
   const areNotAllLiteral = params.filter((param) => param.isLiteral === false);
   if (areNotAllLiteral.length > 0) {
-    context.report({
+    context.ruleContext.report({
       loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
@@ -381,13 +386,13 @@ function validateParamsMember(
 
 function validateSearchParamsMember(
   paramsType: TSTypeLiteral,
-  context: MyRuleContext,
+  { ruleContext }: Context,
 ) {
   const searchParamsMember = paramsType.members.find(
     (member) =>
       member.type === AST_NODE_TYPES.TSPropertySignature &&
       member.key.type === AST_NODE_TYPES.Identifier &&
-      member.key.name === ALLOWED_PROPS_FOR_ROUTECOMPONENT[1],
+      member.key.name === SEARCHPARAMS_PROP_NAME,
   );
   if (
     !searchParamsMember ||
@@ -397,7 +402,7 @@ function validateSearchParamsMember(
     return;
   }
   function reportWrongSearchParamsTypeIssue(node: TSTypeAnnotation) {
-    context.report({
+    ruleContext.report({
       loc: searchParamsMember!.loc,
       messageId: "issue:wrong-searchParams-type",
       fix: (fixer) =>
@@ -470,30 +475,27 @@ function validateSearchParamsMember(
 
 const createTSTypeForGenerateStaticParams = (
   async: boolean,
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
+  fileBasedParameters: FilebasedParams,
 ) => {
-  const fileBasedReturnType = ts.factory.createArrayTypeNode(
-    createInnerTSTypeForGenerateStaticParams(fileBasedParameters),
-  );
+  const fileBasedReturnType = wrapTypeWithArray({
+    type: createInnerTSTypeForGenerateStaticParams(fileBasedParameters),
+  });
   if (async) {
-    return ts.factory.createTypeReferenceNode(
-      ts.factory.createIdentifier("Promise"),
-      [fileBasedReturnType],
-    );
+    return wrapTypeWithPromise({ type: fileBasedReturnType });
   }
   return fileBasedReturnType;
 };
 
 const createTSTypeForGenerateStaticParamsAsString = (
   async: boolean,
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
+  fileBasedParameters: FilebasedParams,
 ) =>
-  `${getStringRepresentation(
+  `${stringifyTypeNode(
     createTSTypeForGenerateStaticParams(async, fileBasedParameters),
   )} `;
 
 export const createInnerTSTypeForGenerateStaticParams = (
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
+  fileBasedParameters: FilebasedParams,
 ) =>
   ts.factory.createTypeLiteralNode(
     fileBasedParameters.map((param) =>
@@ -504,37 +506,24 @@ export const createInnerTSTypeForGenerateStaticParams = (
           ? ts.factory.createToken(ts.SyntaxKind.QuestionToken)
           : undefined,
         !param.catchAll
-          ? ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
-          : ts.factory.createArrayTypeNode(
-              ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-            ),
+          ? STRING_TYPE_NODE
+          : ts.factory.createArrayTypeNode(STRING_TYPE_NODE),
       ),
     ),
   );
 
-export function getStringRepresentation(typeNode: ts.TypeNode): string {
-  return ts
-    .createPrinter()
-    .printNode(
-      ts.EmitHint.Unspecified,
-      typeNode,
-      undefined as unknown as SourceFile,
-    );
-}
-
 export function handleGenerateStaticParamsFunction(
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
   functionNode:
     | ArrowFunctionExpression
     | FunctionExpression
     | FunctionDeclaration,
-  context: MyRuleContext,
+  context: { ruleContext: MyRuleContext; customContext: CustomContext },
 ) {
   const returnType = functionNode.returnType;
   //check if the return type is Promise<T>
 
   if (returnType == null) {
-    const arrowToken = context.sourceCode.getFirstToken(
+    const arrowToken = context.ruleContext.sourceCode.getFirstToken(
       functionNode,
       (token) => token.value === "=>",
     );
@@ -542,7 +531,7 @@ export function handleGenerateStaticParamsFunction(
       functionNode.type === AST_NODE_TYPES.ArrowFunctionExpression &&
       arrowToken != null
     ) {
-      context.report({
+      context.ruleContext.report({
         loc: functionNode.loc,
         messageId: "issue:no-returntype",
         fix: (fixer) =>
@@ -550,12 +539,12 @@ export function handleGenerateStaticParamsFunction(
             arrowToken.range,
             `: ${createTSTypeForGenerateStaticParamsAsString(
               functionNode.async,
-              fileBasedParameters,
+              context.customContext.fileBasedParameters,
             )}`,
           ),
       });
     } else {
-      context.report({
+      context.ruleContext.report({
         loc: functionNode.loc,
         messageId: "issue:no-returntype",
         fix: (fixer) =>
@@ -563,7 +552,7 @@ export function handleGenerateStaticParamsFunction(
             functionNode.body.range,
             `: ${createTSTypeForGenerateStaticParamsAsString(
               functionNode.async,
-              fileBasedParameters,
+              context.customContext.fileBasedParameters,
             )}`,
           ),
       });
@@ -588,7 +577,7 @@ export function handleGenerateStaticParamsFunction(
   const isArray = typeAnnotation.type === AST_NODE_TYPES.TSArrayType;
 
   if (!isArray) {
-    context.report({
+    context.ruleContext.report({
       loc: functionNode.loc,
       messageId: "issue:wrong-returntype",
       fix: (fixer) =>
@@ -596,7 +585,7 @@ export function handleGenerateStaticParamsFunction(
           returnType.range,
           `: ${createTSTypeForGenerateStaticParamsAsString(
             functionNode.async,
-            fileBasedParameters,
+            context.customContext.fileBasedParameters,
           )}`,
         ),
     });
@@ -607,23 +596,15 @@ export function handleGenerateStaticParamsFunction(
   const arrayTypeAnnotation = arrayType.type;
   switch (arrayTypeAnnotation) {
     case AST_NODE_TYPES.TSTypeLiteral:
-      handleGenerateStaticParamsInnerReturnTypeOfArray(
-        arrayType,
-        context,
-        fileBasedParameters,
-      );
+      handleGenerateStaticParamsInnerReturnTypeOfArray(arrayType, context);
       return;
     case AST_NODE_TYPES.TSTypeReference: {
       const type = findReferencedType(arrayType, context);
       if (type) {
-        handleGenerateStaticParamsInnerReturnTypeOfArray(
-          type,
-          context,
-          fileBasedParameters,
-        );
+        handleGenerateStaticParamsInnerReturnTypeOfArray(type, context);
         return;
       } else {
-        context.report({
+        context.ruleContext.report({
           loc: functionNode.loc,
           messageId: "issue:isNoLiteral",
           fix: (fixer) =>
@@ -631,7 +612,7 @@ export function handleGenerateStaticParamsFunction(
               returnType.range,
               createTSTypeForGenerateStaticParamsAsString(
                 functionNode.async,
-                fileBasedParameters,
+                context.customContext.fileBasedParameters,
               ),
             ),
         });
@@ -639,7 +620,7 @@ export function handleGenerateStaticParamsFunction(
       }
     }
     default: {
-      context.report({
+      context.ruleContext.report({
         loc: functionNode.loc,
         messageId: "issue:isNoLiteral",
         fix: (fixer) =>
@@ -647,7 +628,7 @@ export function handleGenerateStaticParamsFunction(
             returnType.range,
             createTSTypeForGenerateStaticParamsAsString(
               functionNode.async,
-              fileBasedParameters,
+              context.customContext.fileBasedParameters,
             ),
           ),
       });
@@ -657,8 +638,7 @@ export function handleGenerateStaticParamsFunction(
 }
 const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   paramsMember: TSTypeLiteral,
-  context: MyRuleContext,
-  fileBasedParameters: ReturnType<typeof readFileBasedParameters>,
+  { ruleContext, customContext }: Context,
 ) => {
   const params: {
     range: [number, number] | null;
@@ -679,30 +659,34 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
     optional: "optional" in member && member.optional,
   }));
 
-  const actualParamNames = fileBasedParameters.map((param) => param.name);
+  const actualParamNames = customContext.fileBasedParameters.map(
+    (param) => param.name,
+  );
   const unAllowedParams = params.filter(
     (param) => param.name == null || !actualParamNames.includes(param.name),
   );
   if (unAllowedParams.length > 0) {
-    context.report({
+    ruleContext.report({
       loc: paramsMember.loc,
       messageId: "issue:unknown-parameter",
       data: { name: unAllowedParams[0]!.name },
       fix: (fixer) =>
         fixer.replaceTextRange(
           paramsMember.range,
-          getStringRepresentation(
-            createInnerTSTypeForGenerateStaticParams(fileBasedParameters),
+          stringifyTypeNode(
+            createInnerTSTypeForGenerateStaticParams(
+              customContext.fileBasedParameters,
+            ),
           ),
         ),
     });
     return;
   }
-  const routeParams = fileBasedParameters
+  const routeParams = customContext.fileBasedParameters
     .filter((param) => !param.catchAll)
     .map((param) => param.name);
 
-  const catchAllParams = fileBasedParameters
+  const catchAllParams = customContext.fileBasedParameters
     .filter((param) => param.catchAll)
     .map((param) => param.name);
 
@@ -710,10 +694,15 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
     routeParams.find((p) => param.name === p && param.type !== "string"),
   );
   if (mustBeString) {
-    reportWrongParameterIssue(context, paramsMember, mustBeString.range, {
-      name: mustBeString.name,
-      type: "string",
-    });
+    reportWrongParameterIssue(
+      { customContext, ruleContext },
+      paramsMember,
+      mustBeString.range,
+      {
+        name: mustBeString.name,
+        type: "string",
+      },
+    );
     return;
   }
 
@@ -722,37 +711,46 @@ const handleGenerateStaticParamsInnerReturnTypeOfArray = (
   );
 
   if (mustBeStringArray) {
-    reportWrongParameterIssue(context, paramsMember, mustBeStringArray.range, {
-      name: mustBeStringArray.name,
-      type: "string[]",
-    });
+    reportWrongParameterIssue(
+      { customContext, ruleContext },
+      paramsMember,
+      mustBeStringArray.range,
+      {
+        name: mustBeStringArray.name,
+        type: "string[]",
+      },
+    );
     return;
   }
 
   const areNotAllLiteral = params.filter((param) => param.isLiteral === false);
   if (areNotAllLiteral.length > 0) {
-    context.report({
+    ruleContext.report({
       loc: paramsMember.loc,
       messageId: "issue:isNoLiteral",
     });
     return;
   }
 
-  const requiredByFileName = fileBasedParameters.find((param) => param.current);
+  const requiredByFileName = customContext.fileBasedParameters.find(
+    (param) => param.current,
+  );
   if (requiredByFileName != null) {
     const typeInUhmParams = params.find(
       (param) => param.name === requiredByFileName.name,
     );
     if (typeInUhmParams == null || typeInUhmParams.optional) {
-      context.report({
+      ruleContext.report({
         loc: paramsMember.loc,
         messageId: "issue:isNoOptionalParam",
         data: { name: requiredByFileName.name },
         fix: (fixer) =>
           fixer.replaceTextRange(
             paramsMember.range,
-            getStringRepresentation(
-              createInnerTSTypeForGenerateStaticParams(fileBasedParameters),
+            stringifyTypeNode(
+              createInnerTSTypeForGenerateStaticParams(
+                customContext.fileBasedParameters,
+              ),
             ),
           ),
       });

@@ -6,6 +6,7 @@ import {
   readFileBasedParameters,
   getFilename,
   getFilePath,
+  getFilenameType,
 } from "../utils/utils";
 import { AST_NODE_TYPES, ESLintUtils } from "@typescript-eslint/utils";
 import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
@@ -29,6 +30,16 @@ export type MessageIds = InferMessageIdsTypeFromRule<
   typeof enforceRouteParamsRule
 >;
 export type MyRuleContext = RuleContext<MessageIds, Options>;
+export type FilebasedParams = ReturnType<typeof readFileBasedParameters>;
+
+export type CustomContext = {
+  fileType: "page" | "layout" | "template" | null;
+  fileBasedParameters: FilebasedParams;
+};
+export type Context = {
+  ruleContext: MyRuleContext;
+  customContext: CustomContext;
+};
 
 const enforceRouteParamsRule = createRule({
   name: "enforce-route-params",
@@ -76,9 +87,10 @@ const enforceRouteParamsRule = createRule({
     },
   ],
 
-  create: (context, options) => {
-    const filePath = getFilePath(context);
-    const filename = getFilename(context);
+  create: (ruleContext, options) => {
+    const filePath = getFilePath(ruleContext);
+    const filename = getFilename(ruleContext);
+    const getType = getFilenameType(filename);
 
     const appDirectoryExists = appRouterFolderExists(filePath);
 
@@ -93,21 +105,24 @@ const enforceRouteParamsRule = createRule({
 
     let nameOfDefaultExport: string | null = null;
 
+    const context: Context = {
+      ruleContext,
+      customContext: {
+        fileType: getType,
+        fileBasedParameters: fileBasedParameters,
+      },
+    };
+
     return {
       FunctionDeclaration(node) {
         if (node.id?.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
-          handleGenerateStaticParamsFunction(
-            fileBasedParameters,
-            node,
-            context,
-          );
+          handleGenerateStaticParamsFunction(node, context);
         } else if (
           node.id?.name &&
           METADATA_FUNCTIONS.includes(node.id?.name) &&
           node.params[0] != null
         ) {
           handleFunctionParameters({
-            fileBasedParameters,
             context,
             options,
             props: node.params[0],
@@ -123,17 +138,12 @@ const enforceRouteParamsRule = createRule({
           node.id.type === AST_NODE_TYPES.Identifier
         ) {
           if (node.id.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
-            handleGenerateStaticParamsFunction(
-              fileBasedParameters,
-              node.init,
-              context,
-            );
+            handleGenerateStaticParamsFunction(node.init, context);
           } else if (
             METADATA_FUNCTIONS.includes(node.id?.name) &&
             node.init.params[0] != null
           ) {
             handleFunctionParameters({
-              fileBasedParameters,
               context,
               options,
               props: node.init.params[0],
@@ -157,7 +167,6 @@ const enforceRouteParamsRule = createRule({
         }
 
         handleFunctionParameters({
-          fileBasedParameters,
           context,
           options,
           props: node.declaration.params[0],
@@ -166,7 +175,7 @@ const enforceRouteParamsRule = createRule({
 
       "Program:exit"() {
         if (nameOfDefaultExport) {
-          const variable = context.sourceCode.scopeManager?.variables?.find(
+          const variable = ruleContext.sourceCode.scopeManager?.variables?.find(
             (variable) => variable.name === nameOfDefaultExport,
           );
           if (!variable) {
@@ -184,7 +193,6 @@ const enforceRouteParamsRule = createRule({
             ) {
               // Add your custom logic for the function node here
               handleFunctionParameters({
-                fileBasedParameters: fileBasedParameters,
                 context,
                 options,
                 props: initNode.params[0],
@@ -195,7 +203,6 @@ const enforceRouteParamsRule = createRule({
             node.params[0]
           ) {
             handleFunctionParameters({
-              fileBasedParameters: fileBasedParameters,
               context,
               options,
               props: node.params[0],
