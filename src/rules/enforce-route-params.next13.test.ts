@@ -1,20 +1,32 @@
-import rule, { Options, type MessageIds } from "./enforce-route-params";
 import path from "path";
-import fs from "fs";
-import { correctSearchParamsTypeAnnotation } from "../utils/utils";
-import { RuleTester, type RunTests } from "@typescript-eslint/rule-tester";
-import parser from "@typescript-eslint/parser";
+import { createTester } from "./testdata";
+import type { PackageJson } from "type-fest";
+import type fs from "fs";
+import type { RunTests } from "@typescript-eslint/rule-tester";
+import type { MessageIds, Options } from "./enforce-route-params";
 
-const ruleTester = new RuleTester({
-  languageOptions: {
-    parser,
-    parserOptions: {
-      tsconfigRootDir: path.resolve(__dirname, "../../"),
-      project: "tsconfig.json",
-    },
-  },
+jest.mock("fs", () => {
+  const actualFs = jest.requireActual<typeof fs>("fs");
+  return {
+    ...actualFs,
+    readFileSync: jest.fn((filePath, options) => {
+      if (filePath === path.join(process.cwd(), "package.json")) {
+        return JSON.stringify({
+          dependencies: { next: "13.0.0" },
+        } satisfies PackageJson);
+      }
+      return actualFs.readFileSync(filePath, options);
+    }) as typeof fs.readFileSync,
+    existsSync: jest.fn((filePath) => {
+      if (filePath === path.join(process.cwd(), "package.json")) {
+        return true;
+      }
+      return actualFs.existsSync(filePath);
+    }) as typeof fs.existsSync,
+  };
 });
-const allCases = {
+
+const allCases: RunTests<MessageIds, Options> = {
   valid: [
     {
       name: "generateStaticParams allows returntype of one param 'id' is working",
@@ -132,8 +144,8 @@ const allCases = {
       ),
     },
     {
-      name: ` The correct type of searchParams is validated`,
-      code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams${correctSearchParamsTypeAnnotation} }) {
+      name: `The correct type of searchParams is validated`,
+      code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: { [key: string]: string | string[] | undefined } }) {
               return  null;
             }
             export default Page;
@@ -188,16 +200,14 @@ const allCases = {
       filename: path.join("src", "app", "page.tsx"),
     },
     {
-      name: `layout file can have a children as Props`,
+      name: `layout file can have children as Props`,
       code: `
-            function Layout(parameters: { searchParams: { sort: "asc" | "desc" }  ,
-            children: React.ReactNode }
+            function Layout(parameters: { children: React.ReactNode }
             ) {
               return null;
             }
             export default Layout;
       `,
-      options: [{ searchParams: false }],
       filename: path.join("src", "app", "layout.tsx"),
     },
   ],
@@ -252,7 +262,12 @@ const allCases = {
         "[reviewId]",
         "page.tsx",
       ),
-      errors: [{ messageId: "issue:unknown-parameter", data: { name: "ids" } }],
+      errors: [
+        {
+          messageId: "issue:unknown-parameter",
+          data: { name: "ids" },
+        },
+      ],
     },
     {
       name: "Replace type params and keep searchParams in TSTypeLiteral",
@@ -274,7 +289,10 @@ const allCases = {
         "page.tsx",
       ),
       errors: [
-        { messageId: "issue:unknown-parameter", data: { name: "idBang" } },
+        {
+          messageId: "issue:unknown-parameter",
+          data: { name: "idBang" },
+        },
       ],
     },
     {
@@ -295,7 +313,10 @@ const allCases = {
         "page.tsx",
       ),
       errors: [
-        { messageId: "issue:unknown-parameter", data: { name: "iasd" } },
+        {
+          messageId: "issue:unknown-parameter",
+          data: { name: "iasd" },
+        },
       ],
     },
     {
@@ -594,17 +615,20 @@ const allCases = {
       filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
     },
     {
-      name: `The type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
+      name: `The type of searchParams is validated`,
       code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: { [key: string]: string | string[] | number } }) {
               return  null;
             }
             export default Page;
             `,
-      output: `function Page(parameters: { params: { id: string, other: string[]}, searchParams${correctSearchParamsTypeAnnotation} }) {
+      output: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: {
+    [key: string]: string | string[] | undefined;
+} }) {
               return  null;
             }
             export default Page;
             `,
+
       errors: [
         {
           messageId: "issue:wrong-searchParams-type",
@@ -620,17 +644,17 @@ const allCases = {
       ),
     },
     {
-      name: `The correct type of searchParams ${correctSearchParamsTypeAnnotation} is validated`,
+      name: `The correct type of searchParams is validated`,
       code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: number }) {
               return  null;
             }
-            export default Page;
-            `,
-      output: `function Page(parameters: { params: { id: string, other: string[]}, searchParams${correctSearchParamsTypeAnnotation} }) {
+            export default Page;`,
+      output: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: {
+    [key: string]: string | string[] | undefined;
+} }) {
               return  null;
             }
-            export default Page;
-            `,
+            export default Page;`,
       errors: [
         {
           messageId: "issue:wrong-searchParams-type",
@@ -873,36 +897,54 @@ const allCases = {
         },
       ],
     },
+    {
+      name: "GET - RouteHandler correct params",
+      code: `
+export const GET = (req, { params }: { params: { wrong: string } }) => {
+  return NextResponse.json({ hello: "world" });
+}`,
+      output: `
+export const GET = (req, { params }: { params: {
+    id: string;
+} }) => {
+  return NextResponse.json({ hello: "world" });
+}`,
+      errors: [
+        {
+          messageId: "issue:unknown-parameter",
+          data: { name: "wrong" },
+        },
+      ],
+      filename: path.join("src", "app", "[id]", "route.ts"),
+    },
+    {
+      name: "GET - RouteHandler corrects params",
+      code: `
+export function GET(req, { params }: { params: {wrong: string } }) {
+  return NextResponse.json({ hello: "world" });
+}`,
+      output: `
+export function GET(req, { params }: { params: {
+    id: string;
+} }) {
+  return NextResponse.json({ hello: "world" });
+}`,
+      errors: [
+        {
+          messageId: "issue:unknown-parameter",
+          data: { name: "wrong" },
+        },
+      ],
+      filename: path.join("src", "app", "[id]", "route.ts"),
+    },
   ],
 } satisfies RunTests<MessageIds, Options>;
 
-const validtestFiles = allCases.valid.map(({ filename }) => filename);
-const invalidTestFiles = allCases.invalid.map(({ filename }) => filename);
-const allTestFiles = [...new Set([...validtestFiles, ...invalidTestFiles])];
+export type ValidRunTests = typeof allCases;
 
-describe("Your ESLint Rule", () => {
-  beforeAll(() => {
-    allTestFiles.forEach((testFilename) => {
-      const normalizedTestFilename = path.normalize(testFilename);
-      const fileAlreadyExists = fs.existsSync(normalizedTestFilename);
-      const directory = path.dirname(normalizedTestFilename);
-      const directoriesExistedBeforeTest = fs.existsSync(directory);
-
-      if (!directoriesExistedBeforeTest) {
-        fs.mkdirSync(directory, { recursive: true });
-      }
-      if (!fileAlreadyExists) {
-        fs.writeFileSync(testFilename, "");
-      }
-    });
-  });
-
-  afterAll(() => {
-    const appDirectory = path.join(__dirname, path.normalize("../app"));
-
-    if (fs.existsSync(appDirectory)) {
-      fs.rmSync(appDirectory, { recursive: true, force: true });
-    }
-  }),
-    ruleTester.run("enforce-route-params", rule, allCases);
+const tester = createTester(allCases);
+describe("enforce-route-params next 13", () => {
+  beforeAll(tester.setUp);
+  afterAll(tester.cleanUp);
+  tester.runTests();
 });

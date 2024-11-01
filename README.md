@@ -36,9 +36,9 @@ The `next-route-params/enforce-route-params` rule checks that only the correct p
 
 🔧 Automatically fixable by the [`--fix` CLI option](https://eslint.org/docs/user-guide/command-line-interface#--fix).
 
-| Name                                                       | Description                                                          | 🔧 |
-| :--------------------------------------------------------- | :------------------------------------------------------------------- | :- |
-| [enforce-route-params](docs/rules/enforce-route-params.md) | enforce correct route parameters built by Next.js' file based routes | 🔧 |
+| Name                                                       | Description                                                          | 🔧  |
+| :--------------------------------------------------------- | :------------------------------------------------------------------- | :-- |
+| [enforce-route-params](docs/rules/enforce-route-params.md) | enforce correct route parameters built by Next.js' file based routes | 🔧  |
 
 <!-- end auto-generated rules list -->
 

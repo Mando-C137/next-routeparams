@@ -1,28 +1,22 @@
-import {
-  appRouterFolderExists,
-  handleFunctionParameters,
-  handleGenerateStaticParamsFunction,
-  isAppRouterFile,
-  readFileBasedParameters,
-  getFilename,
-  getFilePath,
-  getFilenameType,
-} from "../utils/utils";
+import { handleFunctionParameters } from "../utils/utils";
 import { AST_NODE_TYPES, ESLintUtils } from "@typescript-eslint/utils";
 import type { RuleContext } from "@typescript-eslint/utils/ts-eslint";
 import type {
   InferMessageIdsTypeFromRule,
   InferOptionsTypeFromRule,
 } from "@typescript-eslint/utils/eslint-utils";
+import { getFileInfo } from "../utils/fs";
+import { validateGenerateStaticParamsFunction } from "../utils/validation/validateGenerateStaticParams/validateFunction";
+import {
+  METADATA_FUNCTION_NAMES,
+  ROUTE_HANDLERS_FUNCTION_NAMES,
+  type RouteHandlerFunction,
+} from "../utils/constants";
 
 const createRule = ESLintUtils.RuleCreator(
   () => `https://www.paulhe.de/blog/next-route-params-eslint-rule`,
 );
 
-const METADATA_FUNCTIONS = [
-  "generateMetadata",
-  "generateMetadataFile",
-] as ReadonlyArray<string>;
 const GENERATE_STATIC_PARAMS_FUNCTION_NAME = "generateStaticParams";
 
 export type Options = InferOptionsTypeFromRule<typeof enforceRouteParamsRule>;
@@ -30,12 +24,8 @@ export type MessageIds = InferMessageIdsTypeFromRule<
   typeof enforceRouteParamsRule
 >;
 export type MyRuleContext = RuleContext<MessageIds, Options>;
-export type FilebasedParams = ReturnType<typeof readFileBasedParameters>;
 
-export type CustomContext = {
-  fileType: "page" | "layout" | "template" | null;
-  fileBasedParameters: FilebasedParams;
-};
+export type CustomContext = ReturnType<typeof getFileInfo>;
 export type Context = {
   ruleContext: MyRuleContext;
   customContext: CustomContext;
@@ -56,11 +46,12 @@ const enforceRouteParamsRule = createRule({
         "The param {{ name }} does not exist in the corresponding route path of this file",
       "issue:forbiddenPropertyKey": "The property {{ key }} is forbidden",
       "issue:wrong-searchParams-type":
-        "searchParams must be of type { [key: string]: string | string[] | undefined }",
+        "searchParams must be {{ promiseOrEmpty }} of type { [key: string]: string | string[] | undefined }",
       "issue:no-returntype": "The function must specify a returntype",
       "issue:wrong-returntype":
         "The function must specify a correct returntype",
       "issue:isNoOptionalParam": "The param {{ name }} must not be optional",
+      "issue:asyncRequestApi-params": "params must be a Promise",
     },
     schema: [
       {
@@ -88,44 +79,54 @@ const enforceRouteParamsRule = createRule({
   ],
 
   create: (ruleContext, options) => {
-    const filePath = getFilePath(ruleContext);
-    const filename = getFilename(ruleContext);
-    const getType = getFilenameType(filename);
+    const fileInfo = getFileInfo(ruleContext.filename);
 
-    const appDirectoryExists = appRouterFolderExists(filePath);
-
-    if (!appDirectoryExists) {
+    if (
+      !fileInfo.inInAppRouterFolder ||
+      !fileInfo.isAppRouterFile ||
+      fileInfo.asyncRequestAPI == null
+    ) {
       return {};
     }
-    const isAppRouterFileName = isAppRouterFile(filename);
-    if (!isAppRouterFileName) {
-      return {};
-    }
-    const fileBasedParameters = readFileBasedParameters(filePath);
 
     let nameOfDefaultExport: string | null = null;
 
     const context: Context = {
       ruleContext,
       customContext: {
-        fileType: getType,
-        fileBasedParameters: fileBasedParameters,
+        ...fileInfo,
       },
     };
+
+    const registeredRouteHandlerFunctions: RouteHandlerFunction[] = [];
 
     return {
       FunctionDeclaration(node) {
         if (node.id?.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
-          handleGenerateStaticParamsFunction(node, context);
+          validateGenerateStaticParamsFunction(node, context);
         } else if (
           node.id?.name &&
-          METADATA_FUNCTIONS.includes(node.id?.name) &&
+          (<ReadonlyArray<string>>METADATA_FUNCTION_NAMES).includes(
+            node.id?.name,
+          ) &&
           node.params[0] != null
         ) {
           handleFunctionParameters({
             context,
             options,
             props: node.params[0],
+          });
+        } else if (
+          node.id?.name &&
+          (<ReadonlyArray<string>>registeredRouteHandlerFunctions).includes(
+            node.id?.name,
+          ) &&
+          node.params[1] != null
+        ) {
+          handleFunctionParameters({
+            context,
+            options,
+            props: node.params[1],
           });
         }
       },
@@ -138,9 +139,11 @@ const enforceRouteParamsRule = createRule({
           node.id.type === AST_NODE_TYPES.Identifier
         ) {
           if (node.id.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
-            handleGenerateStaticParamsFunction(node.init, context);
+            validateGenerateStaticParamsFunction(node.init, context);
           } else if (
-            METADATA_FUNCTIONS.includes(node.id?.name) &&
+            (<ReadonlyArray<string>>METADATA_FUNCTION_NAMES).includes(
+              node.id?.name,
+            ) &&
             node.init.params[0] != null
           ) {
             handleFunctionParameters({
@@ -148,7 +151,35 @@ const enforceRouteParamsRule = createRule({
               options,
               props: node.init.params[0],
             });
+          } else if (
+            (<ReadonlyArray<string>>ROUTE_HANDLERS_FUNCTION_NAMES).includes(
+              node.id?.name,
+            ) &&
+            node.init.params[1] != null
+          ) {
+            handleFunctionParameters({
+              context,
+              options,
+              props: node.init.params[1],
+            });
           }
+        }
+      },
+
+      ExportNamedDeclaration(node) {
+        if (
+          node.declaration?.type === AST_NODE_TYPES.FunctionDeclaration &&
+          node.declaration.id?.name != null &&
+          (<ReadonlyArray<string>>ROUTE_HANDLERS_FUNCTION_NAMES).includes(
+            node.declaration.id?.name,
+          ) &&
+          node.declaration.params[1] != null
+        ) {
+          handleFunctionParameters({
+            context,
+            options,
+            props: node.declaration.params[1],
+          });
         }
       },
 

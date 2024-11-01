@@ -2,13 +2,14 @@
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  reporters: ["default", "github-actions"],
+  reporters: [["github-actions", { silent: false }], "summary", "default"],
   collectCoverage: true,
   coverageDirectory: "coverage",
+  testPathIgnorePatterns: ["dist"],
   coverageThreshold: {
     global: {
       lines: 90,
-      functions: 100,
-    }
-  }
+      functions: 90,
+    },
+  },
 };

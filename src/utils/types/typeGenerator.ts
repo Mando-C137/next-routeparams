@@ -1,11 +1,11 @@
-import type { FilebasedParams } from "src/rules/enforce-route-params";
-import ts, { type SourceFile, type TypeNode } from "typescript";
+import ts from "typescript";
+import type { FilebasedParams, getFileInfo } from "../fs";
 
 function wrapTypeWithIdentifier({
   type,
   identifier,
 }: {
-  type: TypeNode;
+  type: ts.TypeNode;
   identifier: string;
 }) {
   return ts.factory.createTypeReferenceNode(
@@ -14,24 +14,24 @@ function wrapTypeWithIdentifier({
   );
 }
 
-export function wrapTypeWithPromise({ type }: { type: TypeNode }) {
+function wrapTypeWithPromise({ type }: { type: ts.TypeNode }) {
   return wrapTypeWithIdentifier({ type, identifier: "Promise" });
 }
 
-export function wrapTypeWithArray({ type }: { type: TypeNode }) {
+function wrapTypeWithArray({ type }: { type: ts.TypeNode }) {
   return ts.factory.createArrayTypeNode(type);
 }
-export function makeUnionType(...types: TypeNode[]) {
+function makeUnionType(...types: ts.TypeNode[]) {
   return ts.factory.createUnionTypeNode(types);
 }
-export function makeRecordType(from: TypeNode, to: TypeNode) {
+function makeRecordType(from: ts.TypeNode, to: ts.TypeNode) {
   return ts.factory.createTypeReferenceNode(
     ts.factory.createIdentifier("Record"),
     [from, to],
   );
 }
 
-export const STRING_TYPE_NODE = ts.factory.createKeywordTypeNode(
+const STRING_TYPE_NODE = ts.factory.createKeywordTypeNode(
   ts.SyntaxKind.StringKeyword,
 );
 
@@ -58,21 +58,35 @@ const SEARCHPARAMS_VALUE_TYPE_NODE = makeUnionType(
 /**
  * will equal to ```[key :string]: string | string[] | undefined```
  */
-const SEARCHPARAMS_TYPE_NODE = ts.factory.createTypeLiteralNode([
-  ts.factory.createIndexSignature(
-    undefined,
-    [SEARCHPARAMS_KEY_TYPE_NODE],
-    SEARCHPARAMS_VALUE_TYPE_NODE,
-  ),
-]);
+const SEARCHPARAMS_TYPE_NODE = (
+  asyncRequestAPI: GeneratorParams["asyncRequestAPI"],
+) => {
+  const searchParamsType = ts.factory.createTypeLiteralNode([
+    ts.factory.createIndexSignature(
+      undefined,
+      [SEARCHPARAMS_KEY_TYPE_NODE],
+      SEARCHPARAMS_VALUE_TYPE_NODE,
+    ),
+  ]);
+  if (!asyncRequestAPI) {
+    return searchParamsType;
+  }
+  return wrapTypeWithPromise({ type: searchParamsType });
+};
 
 /**
  * will equal to ```Record<string, never>```
  */
-const EMPTY_PARAMS_TYPE_NODE = makeRecordType(
-  STRING_TYPE_NODE,
-  ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
-);
+const createEmptyParamsTypeNode = ({ asyncRequestAPI }: GeneratorParams) => {
+  const recordType = makeRecordType(
+    STRING_TYPE_NODE,
+    ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
+  );
+  if (asyncRequestAPI) {
+    return wrapTypeWithPromise({ type: recordType });
+  }
+  return recordType;
+};
 
 /**
  * will equal to an object literal
@@ -84,11 +98,9 @@ const EMPTY_PARAMS_TYPE_NODE = makeRecordType(
  * }
  * ```
  *
- * @param params
- * @returns
  */
-function createParamsTypeNode(params: FilebasedParams) {
-  return ts.factory.createTypeLiteralNode(
+function createParamsTypeNode({ asyncRequestAPI, params }: GeneratorParams) {
+  const paramsType = ts.factory.createTypeLiteralNode(
     params.map((param) =>
       ts.factory.createPropertySignature(
         undefined,
@@ -100,29 +112,89 @@ function createParamsTypeNode(params: FilebasedParams) {
       ),
     ),
   );
+  if (!asyncRequestAPI) {
+    return paramsType;
+  }
+  return wrapTypeWithPromise({ type: paramsType });
 }
 
-export const stringifyTypeNode = (typeNode: ts.TypeNode): string =>
-  ts
-    .createPrinter()
-    .printNode(
-      ts.EmitHint.Unspecified,
-      typeNode,
-      undefined as unknown as SourceFile,
-    );
+const createGenerateStaticParamsReturntypeArrayArgument = (
+  params: FilebasedParams,
+) =>
+  ts.factory.createTypeLiteralNode(
+    params.map((param) =>
+      ts.factory.createPropertySignature(
+        undefined,
+        ts.factory.createIdentifier(param.name),
+        !param.current
+          ? ts.factory.createToken(ts.SyntaxKind.QuestionToken)
+          : undefined,
+        !param.catchAll
+          ? STRING_TYPE_NODE
+          : ts.factory.createArrayTypeNode(STRING_TYPE_NODE),
+      ),
+    ),
+  );
+
+const createGenerateStaticParamsReturntype = (
+  async: boolean,
+  params: FilebasedParams,
+) => {
+  const type = wrapTypeWithArray({
+    type: createGenerateStaticParamsReturntypeArrayArgument(params),
+  });
+  if (async) {
+    return wrapTypeWithPromise({ type });
+  }
+  return type;
+};
+
+function stringify(typeNode: ts.TypeNode): string;
+function stringify<TParams extends unknown[]>(
+  typeNodeFactory: (...params: TParams) => ts.TypeNode,
+): (...params: TParams) => string;
+function stringify<TParams extends unknown[]>(
+  typeNodeOrFactory: ts.TypeNode | ((...params: TParams) => ts.TypeNode),
+): string | ((...params: TParams) => string) {
+  const stringifier = (typeNode: ts.TypeNode): string =>
+    ts
+      .createPrinter()
+      .printNode(
+        ts.EmitHint.Unspecified,
+        typeNode,
+        undefined as unknown as ts.SourceFile,
+      );
+
+  if (typeof typeNodeOrFactory === "function") {
+    return (...params: TParams): string =>
+      stringifier(
+        (typeNodeOrFactory as (...args: TParams) => ts.TypeNode)(...params),
+      );
+  }
+  return stringifier(typeNodeOrFactory);
+}
 
 /***************** STRINGIFIED  TYPES******************/
 
-export const SEARCHPARAMS_TYPE_NODE_STRING = stringifyTypeNode(
-  SEARCHPARAMS_TYPE_NODE,
-);
+export const SEARCHPARAMS_TYPE_NODE_STRING = stringify(SEARCHPARAMS_TYPE_NODE);
 
-const EMPTY_PARAMS_TYPE_NODE_STRING = stringifyTypeNode(EMPTY_PARAMS_TYPE_NODE);
+const creatEmptyParamsTypeNodeString = stringify(createEmptyParamsTypeNode);
 
-export function createParamsTypeNodeString(params: FilebasedParams) {
-  return stringifyTypeNode(createParamsTypeNode(params));
+export function createParamsTypeNodeString(generatorParams: GeneratorParams) {
+  return generatorParams.params.length === 0
+    ? creatEmptyParamsTypeNodeString(generatorParams)
+    : stringify(createParamsTypeNode)(generatorParams);
 }
 
-export function createParamsTypeNodeStringWithColon(params: FilebasedParams) {
-  return `: ${params.length === 0 ? EMPTY_PARAMS_TYPE_NODE_STRING : createParamsTypeNodeString(params)}`;
-}
+type GeneratorParams = Pick<
+  ReturnType<typeof getFileInfo>,
+  "params" | "asyncRequestAPI"
+>;
+
+export const createGenerateStaticParamsReturntypeArrayArgumentString =
+  stringify(createGenerateStaticParamsReturntypeArrayArgument);
+
+export const createGenerateStaticParamsReturntypeString = (
+  async: boolean,
+  params: FilebasedParams,
+) => `${stringify(createGenerateStaticParamsReturntype(async, params))} `;

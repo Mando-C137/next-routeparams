@@ -24,12 +24,15 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run Tests
         run: npm test
 
-    #   - name: Upload test results
-    #     if: always()
-    #     uses: actions/upload-artifact@v3
-    #     with:
-    #       name: test-results
-    #      path: ./test-results # Adjust this if you're saving test results to a specific directory
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: coverage # Adjust this if you're saving test results to a specific directory
