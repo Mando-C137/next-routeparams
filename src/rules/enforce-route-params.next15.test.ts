@@ -12,7 +12,7 @@ jest.mock("fs", () => {
     readFileSync: jest.fn((filePath, options) => {
       if (filePath === path.join(process.cwd(), "package.json")) {
         return JSON.stringify({
-          dependencies: { next: "15.0.0" },
+          dependencies: { next: "^15.0.3" },
         } satisfies PackageJson);
       }
       return actualFs.readFileSync(filePath, options);

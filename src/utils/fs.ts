@@ -121,13 +121,17 @@ function isAsyncRequestAPI() {
   if (!nextDependency) {
     return null;
   }
-  const nextVersion = semVer.parse(nextDependency);
+  const minVersion = semVer.minVersion(nextDependency);
+  if (!minVersion) {
+    return null;
+  }
+  const nextVersion = semVer.major(minVersion);
   if (!nextVersion) {
     return null;
   }
 
-  const isNotAsycRequestAPI = nextVersion.major > 12 && nextVersion.major < 14;
-  const isAsycRequestAPI = nextVersion.major > 14;
+  const isNotAsycRequestAPI = nextVersion > 12 && nextVersion < 14;
+  const isAsycRequestAPI = nextVersion > 14;
 
   if (isNotAsycRequestAPI) {
     return false;
