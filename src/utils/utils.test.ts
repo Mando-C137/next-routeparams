@@ -1,4 +1,3 @@
-import { get } from "http";
 import { getFileInfo } from "./fs";
 import {
   ALLOWED_PROPS_FOR_LAYOUT,
