@@ -113,7 +113,7 @@ const allCases: RunTests<MessageIds, Options> = {
     },
     {
       name: "A function which is later default exported has the correct parameter type",
-      code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: { [key: string]: string | string[] | undefined } }) {
+      code: `function Page(parameters: { params: { id: string, other: string[]}, searchParams: Record<string, string | string[] | undefined> }) {
               return  null;
             }
             export default Page;

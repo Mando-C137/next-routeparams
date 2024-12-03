@@ -73,10 +73,14 @@ export function validateSearchParams(
   }
 }
 
-/**
- * required that input type is ```{[ key: string] : string | string[] | undefined }```
- */
 function validateSearchParamsStructure(member: TypeNode | undefined) {
+  return (
+    validateRecordTypeStructure(member) ||
+    validateIndexSignatureStructure(member)
+  );
+}
+
+function validateIndexSignatureStructure(member: TypeNode | undefined) {
   if (!member || member.type !== AST_NODE_TYPES.TSTypeLiteral) {
     return false;
   }
@@ -96,9 +100,65 @@ function validateSearchParamsStructure(member: TypeNode | undefined) {
   }
 
   const unionType = firstMember.typeAnnotation?.typeAnnotation;
-  const areAllowedSearchParamsTypes = unionType.types.reduce(
+  const areAllowedSearchParamsTypes = extractTypes(unionType.types);
+
+  if (
+    areAllowedSearchParamsTypes == null ||
+    Object.values(areAllowedSearchParamsTypes).includes(false)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * required that input type is ```Record<string, string | string[] | undefined>```
+ */
+function validateRecordTypeStructure(typeNode: TypeNode | undefined): boolean {
+  if (!typeNode || typeNode.type !== AST_NODE_TYPES.TSTypeReference) {
+    return false;
+  }
+
+  // Ensure the base type is Record
+  if (
+    typeNode.typeName.type !== AST_NODE_TYPES.Identifier ||
+    typeNode.typeName.name !== "Record"
+  ) {
+    return false;
+  }
+
+  const typeArguments = typeNode.typeArguments?.params;
+  if (!typeArguments || typeArguments.length !== 2) {
+    return false;
+  }
+
+  const [keyType, valueType] = typeArguments;
+
+  // Check if key type is string
+  if (keyType?.type !== AST_NODE_TYPES.TSStringKeyword) {
+    return false;
+  }
+
+  // Check if value type is a union of string, string[], and undefined
+  if (valueType?.type !== AST_NODE_TYPES.TSUnionType) {
+    return false;
+  }
+  const allowedValueTypes = extractTypes(valueType.types);
+
+  if (
+    allowedValueTypes == null ||
+    Object.values(allowedValueTypes).includes(false)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function extractTypes(types: TypeNode[]) {
+  return types.reduce(
     (acc, element) => {
-      if (acc == undefined) {
+      if (acc == null) {
         return acc;
       }
       if (element.type === AST_NODE_TYPES.TSStringKeyword) {
@@ -127,12 +187,4 @@ function validateSearchParamsStructure(member: TypeNode | undefined) {
       | { str: boolean; strArr: boolean; undef: boolean }
       | undefined,
   );
-
-  if (
-    areAllowedSearchParamsTypes == null ||
-    Object.values(areAllowedSearchParamsTypes).includes(false)
-  ) {
-    return false;
-  }
-  return true;
 }
