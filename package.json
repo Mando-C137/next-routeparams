@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-next-route-params",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "eslint rule to enforce correct route parameters for Next.js",
   "type": "module",
   "main": "dist/index.cjs",
