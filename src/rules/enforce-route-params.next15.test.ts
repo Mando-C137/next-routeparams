@@ -1,30 +1,14 @@
 import path from "path";
-import type { PackageJson } from "type-fest";
+import { beforeAll, afterAll, describe, vi } from "vitest";
 import { createTester } from "./testdata";
-import type fs from "fs";
 import type { RunTests } from "@typescript-eslint/rule-tester";
 import type { MessageIds, Options } from "./enforce-route-params";
 
-jest.mock("fs", () => {
-  const actualFs = jest.requireActual<typeof fs>("fs");
-  return {
-    ...actualFs,
-    readFileSync: jest.fn((filePath, options) => {
-      if (filePath === path.join(process.cwd(), "package.json")) {
-        return JSON.stringify({
-          dependencies: { next: "^15.0.3" },
-        } satisfies PackageJson);
-      }
-      return actualFs.readFileSync(filePath, options);
-    }) as typeof fs.readFileSync,
-    existsSync: jest.fn((filePath) => {
-      if (filePath === path.join(process.cwd(), "package.json")) {
-        return true;
-      }
-      return actualFs.existsSync(filePath);
-    }) as typeof fs.existsSync,
-  };
-});
+vi.mock("../utils/readPackageJson", () => ({
+  readPackageJson: vi.fn(() => ({
+    dependencies: { next: "^15.0.3" },
+  })),
+}));
 
 const allTestFiles = {
   valid: [
@@ -206,7 +190,7 @@ export default Page;`,
             }
             export default Page;
       `,
-      options: [{ searchParams: false }],
+      options: [{ searchParams: false, helperTypes: false }],
       filename: path.join("src", "app", "page.tsx"),
     },
     {
@@ -218,7 +202,7 @@ export default Page;`,
             }
             export default Layout;
       `,
-      options: [{ searchParams: false }],
+      options: [{ searchParams: false, helperTypes: false }],
       filename: path.join("src", "app", "layout.tsx"),
     },
     {
@@ -232,6 +216,95 @@ export default async function ReviewsForMoviePage(
   return params.id;
 }`,
       filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+    },
+    {
+      name: "PageProps helper type is allowed with helperTypes option",
+      code: `export default async function Page(props: PageProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+    },
+    {
+      name: "LayoutProps helper type is allowed with helperTypes option",
+      code: `export default function Layout(props: LayoutProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "layout.tsx"),
+    },
+    {
+      name: "Optional catch-all params are validated correctly",
+      code: `export default async function Page(parameters: { params: Promise<{ slug: string[] }> }) {
+  return null;
+}`,
+      filename: path.join("src", "app", "blog", "[[...slug]]", "page.tsx"),
+    },
+    {
+      name: "generateMetadata with PageProps helper type is allowed",
+      code: `export function generateMetadata(parameters: PageProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+    },
+    {
+      name: "generateStaticParams with correct PageProps-derived params type is allowed",
+      code: `export const generateStaticParams = ({ params }: { params?: Awaited<Omit<PageProps<'/movies/[id]'>, "searchParams">["params"]> }): { reviewId: string }[] => []`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
+    },
+    {
+      name: "generateStaticParams without params is allowed with helperTypes",
+      code: `export const generateStaticParams = (): { id: string }[] => []`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+    },
+    {
+      name: "generateStaticParams as arrow function misses current route param",
+      code: `export const generateStaticParams = () : {optionalFirst: string, optionalSecond: string }[] => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
+    },
+    {
+      name: "generateStaticParams as arrow function is not allowed to have current route param as optional",
+      code: `export const generateStaticParams = () : {optionalFirst?: string, optionalSecond?: string, id?: string }[] => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
+    },
+    {
+      name: "async generateStaticParams as arrow function corrects wrong return type",
+      code: `export const generateStaticParams  = async (): Promise<{ id?: string }[]> => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
     },
   ],
   invalid: [
@@ -689,7 +762,7 @@ export default Page;`,
       code: `const generateStaticParams = function(parameters : {params : { id : string}}): { id: string; reviewId?: string} {return [{ id: "hallo"}]}`,
       output: `const generateStaticParams = function(parameters : {params : { id : string}}): {
     reviewId?: string;
-    id: string;
+    id?: string;
 }[]  {return [{ id: "hallo"}]}`,
       errors: [
         {
@@ -711,7 +784,7 @@ export default Page;`,
       return []
       }`,
       output: `function generateStaticParams(): {
-    id: string;
+    id?: string;
 }[] {
       return []
       }`,
@@ -726,7 +799,7 @@ export default Page;`,
       name: "generateStaticParams as arrow function replaces keys of returntype of 'nick' with 'id' ",
       code: `export const generateStaticParams = () : { nick: string }[] => []`,
       output: `export const generateStaticParams = () : {
-    id: string;
+    id?: string;
 }[] => []`,
       filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
       errors: [
@@ -735,54 +808,7 @@ export default Page;`,
         },
       ],
     },
-    {
-      name: "generateStaticParams as arrow function misses current route param",
-      code: `export const generateStaticParams = () : {optionalFirst: string, optionalSecond: string }[] => []`,
-      output: `export const generateStaticParams = () : {
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[] => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-          data: { name: "id" },
-        },
-      ],
-    },
-    {
-      name: "generateStaticParams as arrow function is not allowed to have current route param as optional",
-      code: `export const generateStaticParams = () : {optionalFirst?: string, optionalSecond?: string, id?: string }[] => []`,
-      output: `export const generateStaticParams = () : {
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[] => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-          data: { name: "id" },
-        },
-      ],
-    },
+
     {
       name: "generateMetadata as arrow function is not allowed to have current route param as optional",
       code: `export const generateMetadata  = ( props: { params : Promise<{ id: number }>} ) => []`,
@@ -829,7 +855,7 @@ export default Page;`,
       output: `export const generateStaticParams  = () : {
     optionalFirst?: string;
     optionalSecond?: string;
-    id: string;
+    id?: string;
 }[] => []`,
       filename: path.join(
         "src",
@@ -852,7 +878,7 @@ export default Page;`,
       output: `export const generateStaticParams  = async () : Promise<{
     optionalFirst?: string;
     optionalSecond?: string;
-    id: string;
+    id?: string;
 }[]> => []`,
       filename: path.join(
         "src",
@@ -869,29 +895,7 @@ export default Page;`,
         },
       ],
     },
-    {
-      name: "async generateStaticParams as arrow function corrects wrong return type",
-      code: `export const generateStaticParams  = async (): Promise<{ id?: string }[]> => []`,
-      output: `export const generateStaticParams  = async (): Promise<{
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[]> => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-        },
-      ],
-    },
+
     {
       name: "async generateStaticParams as normal function corrects wrong return type",
       code: `export async function generateStaticParams(): Promise<{ id: number}[]> {return [];}`,
@@ -979,6 +983,305 @@ export function GET(req, { params }: { params: Promise<{
         },
       ],
       filename: path.join("src", "app", "[id]", "route.ts"),
+    },
+    {
+      name: "Page with inline type is fixed to PageProps with helperTypes option",
+      code: `
+export default async function Page(parameters: { params: Promise<{ id: string }> }) {
+  return <div>Hallo</div>;
+}`,
+      output: `
+export default async function Page(parameters: PageProps<'/movies/[id]'>) {
+  return <div>Hallo</div>;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "PageProps", routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "Layout with inline type is fixed to LayoutProps with helperTypes option",
+      code: `
+export default function Layout(parameters: { params: Promise<{ id: string }>, children: React.ReactNode }) {
+  return null;
+}`,
+      output: `
+export default function Layout(parameters: LayoutProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "layout.tsx"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "LayoutProps", routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "Route handler with inline type is fixed to RouteContext with helperTypes option",
+      code: `
+export async function GET(req: Request, { params }: { params: Promise<{ wrong: string }> }) {
+  return Response.json({ hello: "world" });
+}`,
+      output: `
+export async function GET(req: Request, { params }: RouteContext<'/[id]'>) {
+  return Response.json({ hello: "world" });
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "[id]", "route.ts"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "RouteContext", routePath: "/[id]" },
+        },
+      ],
+    },
+    {
+      name: "PageProps with wrong route path reports error and fixes",
+      code: `
+export default async function Page(props: PageProps<'/blog'>) {
+  return null;
+}`,
+      output: `
+export default async function Page(props: PageProps<'/blog/[slug]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "blog", "[slug]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:wrong-helperType-path",
+          data: {
+            helperType: "PageProps",
+            expectedPath: "/blog/[slug]",
+            actualPath: "/blog",
+          },
+        },
+      ],
+    },
+    {
+      name: "LayoutProps with wrong route path reports error and fixes",
+      code: `
+export default function Layout(props: LayoutProps<'/wrong'>) {
+  return null;
+}`,
+      output: `
+export default function Layout(props: LayoutProps<'/dashboard'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "dashboard", "layout.tsx"),
+      errors: [
+        {
+          messageId: "issue:wrong-helperType-path",
+          data: {
+            helperType: "LayoutProps",
+            expectedPath: "/dashboard",
+            actualPath: "/wrong",
+          },
+        },
+      ],
+    },
+    {
+      name: "RouteContext with wrong route path reports error and fixes",
+      code: `
+export async function GET(req: Request, ctx: RouteContext<'/[other]'>) {
+  return Response.json({ id: (await ctx.params).id });
+}`,
+      output: `
+export async function GET(req: Request, ctx: RouteContext<'/[id]'>) {
+  return Response.json({ id: (await ctx.params).id });
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "[id]", "route.ts"),
+      errors: [
+        {
+          messageId: "issue:wrong-helperType-path",
+          data: {
+            helperType: "RouteContext",
+            expectedPath: "/[id]",
+            actualPath: "/[other]",
+          },
+        },
+      ],
+    },
+    {
+      name: "PageProps with wrong route path in arrow function",
+      code: `
+const Page = (props: PageProps<'/about'>) => {
+  return <div>About</div>;
+}
+export default Page;
+`,
+      output: `
+const Page = (props: PageProps<'/about/team'>) => {
+  return <div>About</div>;
+}
+export default Page;
+`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "about", "team", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:wrong-helperType-path",
+          data: {
+            helperType: "PageProps",
+            expectedPath: "/about/team",
+            actualPath: "/about",
+          },
+        },
+      ],
+    },
+    {
+      name: "generateMetadata with inline type is fixed to PageProps with helperTypes option",
+      code: `
+export function generateMetadata(parameters: { params: Promise<{ id: string }> }) {
+  return null;
+}`,
+      output: `
+export function generateMetadata(parameters: PageProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "PageProps", routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "generateMetadata arrow function with inline type is fixed to PageProps with helperTypes option",
+      code: `
+export const generateMetadata = (parameters: { params: Promise<{ id: string }> }) => {
+  return null;
+}`,
+      output: `
+export const generateMetadata = (parameters: PageProps<'/movies/[id]'>) => {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "PageProps", routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "generateMetadata with wrong PageProps path reports error and fixes",
+      code: `
+export function generateMetadata(parameters: PageProps<'/wrong'>) {
+  return null;
+}`,
+      output: `
+export function generateMetadata(parameters: PageProps<'/movies/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:wrong-helperType-path",
+          data: {
+            helperType: "PageProps",
+            expectedPath: "/movies/[id]",
+            actualPath: "/wrong",
+          },
+        },
+      ],
+    },
+    {
+      name: "generateStaticParams with inline params type is fixed to PageProps-derived type",
+      code: `
+export const generateStaticParams = ({ params }: { params: Promise<{ id: string }> }): { reviewId: string }[] => []`,
+      output: `
+export const generateStaticParams = ({ params }: { params?: Awaited<Omit<PageProps<'/movies/[id]'>, "searchParams">["params"]> }): { reviewId: string }[] => []`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
+      errors: [
+        {
+          messageId: "issue:useHelperTypeForGenerateStaticParams",
+          data: { routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "generateStaticParams function with inline params type is fixed to PageProps-derived type",
+      code: `
+export function generateStaticParams({ params }: { params: Promise<{ id: string }> }): { reviewId: string }[] {
+  return [];
+}`,
+      output: `
+export function generateStaticParams({ params }: { params?: Awaited<Omit<PageProps<'/movies/[id]'>, "searchParams">["params"]> }): { reviewId: string }[] {
+  return [];
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[id]",
+        "[reviewId]",
+        "page.tsx",
+      ),
+      errors: [
+        {
+          messageId: "issue:useHelperTypeForGenerateStaticParams",
+          data: { routePath: "/movies/[id]" },
+        },
+      ],
+    },
+    {
+      name: "Optional catch-all param with wrong type is corrected",
+      code: `
+export default async function Page(parameters: { params: Promise<{ slug: string }> }) {
+  return null;
+}`,
+      output: `
+export default async function Page(parameters: { params: Promise<{ slug: string[] }> }) {
+  return null;
+}`,
+      filename: path.join("src", "app", "blog", "[[...slug]]", "page.tsx"),
+      errors: [
+        {
+          messageId: "issue:isWrongParameterType",
+          data: { name: "slug", type: "string[]" },
+        },
+      ],
+    },
+    {
+      name: "default.tsx with inline type is fixed to LayoutProps with helperTypes option",
+      code: `
+export default function Default(parameters: { params: Promise<{ id: string }> }) {
+  return null;
+}`,
+      output: `
+export default function Default(parameters: LayoutProps<'/dashboard/[id]'>) {
+  return null;
+}`,
+      options: [{ searchParams: true, helperTypes: true }],
+      filename: path.join("src", "app", "dashboard", "[id]", "default.tsx"),
+      errors: [
+        {
+          messageId: "issue:useHelperType",
+          data: { helperType: "LayoutProps", routePath: "/dashboard/[id]" },
+        },
+      ],
     },
   ],
 } satisfies RunTests<MessageIds, Options>;

@@ -1,36 +1,21 @@
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import eslintPlugin from "eslint-plugin-eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
+import tseslint from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
+import eslintPlugin from "eslint-plugin-eslint-plugin";
 
 export default [
   {
-    ignores: ["**/dist", "**/*.js", "**/*.test.ts"],
+    ignores: ["**/dist", "**/*.js", "**/*.test.ts", "**/testdata.ts"],
   },
-  ...compat.extends(
-    "plugin:@typescript-eslint/recommended",
-    "prettier",
-    "plugin:eslint-plugin/recommended",
-  ),
+  js.configs.recommended,
+  ...tseslint.configs["flat/recommended"],
+  eslintPlugin.configs.recommended,
   {
     plugins: {
-      "@typescript-eslint": typescriptEslint,
+      "@typescript-eslint": tseslint,
     },
     languageOptions: {
       parser: tsParser,
-      ecmaVersion: 5,
-      sourceType: "script",
       parserOptions: {
         project: "./tsconfig.json",
       },
@@ -40,17 +25,13 @@ export default [
       "eslint-plugin/require-meta-docs-description": "error",
     },
   },
-  ...compat
-    .extends("plugin:@typescript-eslint/recommended-requiring-type-checking")
-    .map((config) => ({
-      ...config,
-      files: ["**/*.ts"],
-    })),
+  ...tseslint.configs["flat/recommended-type-checked"].map((config) => ({
+    ...config,
+    files: ["**/*.ts"],
+  })),
   {
     files: ["**/*.ts"],
     languageOptions: {
-      ecmaVersion: 5,
-      sourceType: "script",
       parserOptions: {
         project: "tsconfig.json",
       },

@@ -16,16 +16,14 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
 
-    "module": "NodeNext",
+    "module": "ESNext",
     "outDir": "dist",
-
     "lib": ["ES2022", "DOM"],
-
     "rootDir": "src",
-    "moduleResolution": "NodeNext",
-    "baseUrl": ".",
-    "forceConsistentCasingInFileNames": true
+    "moduleResolution": "bundler",
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/testdata.ts"]
 }

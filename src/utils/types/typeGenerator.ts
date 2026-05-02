@@ -126,9 +126,7 @@ const createGenerateStaticParamsReturntypeArrayArgument = (
       ts.factory.createPropertySignature(
         undefined,
         ts.factory.createIdentifier(param.name),
-        !param.current
-          ? ts.factory.createToken(ts.SyntaxKind.QuestionToken)
-          : undefined,
+        ts.factory.createToken(ts.SyntaxKind.QuestionToken),
         !param.catchAll
           ? STRING_TYPE_NODE
           : ts.factory.createArrayTypeNode(STRING_TYPE_NODE),
@@ -167,9 +165,7 @@ function stringify<TParams extends unknown[]>(
 
   if (typeof typeNodeOrFactory === "function") {
     return (...params: TParams): string =>
-      stringifier(
-        (typeNodeOrFactory as (...args: TParams) => ts.TypeNode)(...params),
-      );
+      stringifier(typeNodeOrFactory(...params));
   }
   return stringifier(typeNodeOrFactory);
 }

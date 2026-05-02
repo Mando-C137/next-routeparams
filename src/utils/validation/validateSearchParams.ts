@@ -1,7 +1,7 @@
 import type {
   TSTypeLiteral,
   TypeNode,
-} from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+} from "../../../node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type { Context } from "../../rules/enforce-route-params";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { SEARCHPARAMS_PROP_NAME } from "../constants";

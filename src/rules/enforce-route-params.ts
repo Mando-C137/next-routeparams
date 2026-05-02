@@ -50,8 +50,13 @@ const enforceRouteParamsRule = createRule({
       "issue:no-returntype": "The function must specify a returntype",
       "issue:wrong-returntype":
         "The function must specify a correct returntype",
-      "issue:isNoOptionalParam": "The param {{ name }} must not be optional",
       "issue:asyncRequestApi-params": "params must be a Promise",
+      "issue:useHelperType":
+        "Use {{ helperType }}<'{{ routePath }}'> instead of an inline type annotation",
+      "issue:wrong-helperType-path":
+        "{{ helperType }} must use route path '{{ expectedPath }}', not '{{ actualPath }}'",
+      "issue:useHelperTypeForGenerateStaticParams":
+        "Use { params?: Awaited<Omit<PageProps<'{{ routePath }}'>, 'searchParams'>['params']> } for generateStaticParams parameters",
     },
     schema: [
       {
@@ -60,9 +65,14 @@ const enforceRouteParamsRule = createRule({
           searchParams: {
             type: "boolean",
             enum: [true, false],
-            default: true,
             description:
               "If true, also strictly validates searchParams and enforces that the searchParams parameter is of type { [key: string]: string | string[] | undefined }",
+          },
+          helperTypes: {
+            type: "boolean",
+            enum: [true, false],
+            description:
+              "If true, enforces the use of Next.js helper types (PageProps, LayoutProps, RouteContext) instead of inline type annotations for page, layout, and route files",
           },
         },
         additionalProperties: false,
@@ -71,12 +81,13 @@ const enforceRouteParamsRule = createRule({
 
     fixable: "code",
     hasSuggestions: false,
+    defaultOptions: [
+      {
+        searchParams: true,
+        helperTypes: false,
+      },
+    ],
   },
-  defaultOptions: [
-    {
-      searchParams: true,
-    },
-  ],
 
   create: (ruleContext, options) => {
     const fileInfo = getFileInfo(ruleContext.filename);
@@ -104,6 +115,14 @@ const enforceRouteParamsRule = createRule({
       FunctionDeclaration(node) {
         if (node.id?.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
           validateGenerateStaticParamsFunction(node, context);
+          if (options[0]?.helperTypes && node.params[0] != null) {
+            handleFunctionParameters({
+              context,
+              options,
+              props: node.params[0],
+              forGenerateStaticParams: true,
+            });
+          }
         } else if (
           node.id?.name &&
           (<ReadonlyArray<string>>METADATA_FUNCTION_NAMES).includes(
@@ -115,6 +134,7 @@ const enforceRouteParamsRule = createRule({
             context,
             options,
             props: node.params[0],
+            allowHelperTypes: true,
           });
         } else if (
           node.id?.name &&
@@ -127,6 +147,7 @@ const enforceRouteParamsRule = createRule({
             context,
             options,
             props: node.params[1],
+            allowHelperTypes: true,
           });
         }
       },
@@ -140,6 +161,14 @@ const enforceRouteParamsRule = createRule({
         ) {
           if (node.id.name === GENERATE_STATIC_PARAMS_FUNCTION_NAME) {
             validateGenerateStaticParamsFunction(node.init, context);
+            if (options[0]?.helperTypes && node.init.params[0] != null) {
+              handleFunctionParameters({
+                context,
+                options,
+                props: node.init.params[0],
+                forGenerateStaticParams: true,
+              });
+            }
           } else if (
             (<ReadonlyArray<string>>METADATA_FUNCTION_NAMES).includes(
               node.id?.name,
@@ -150,6 +179,7 @@ const enforceRouteParamsRule = createRule({
               context,
               options,
               props: node.init.params[0],
+              allowHelperTypes: true,
             });
           } else if (
             (<ReadonlyArray<string>>ROUTE_HANDLERS_FUNCTION_NAMES).includes(
@@ -161,6 +191,7 @@ const enforceRouteParamsRule = createRule({
               context,
               options,
               props: node.init.params[1],
+              allowHelperTypes: true,
             });
           }
         }
@@ -179,6 +210,7 @@ const enforceRouteParamsRule = createRule({
             context,
             options,
             props: node.declaration.params[1],
+            allowHelperTypes: true,
           });
         }
       },
@@ -201,6 +233,7 @@ const enforceRouteParamsRule = createRule({
           context,
           options,
           props: node.declaration.params[0],
+          allowHelperTypes: true,
         });
       },
 
@@ -227,6 +260,7 @@ const enforceRouteParamsRule = createRule({
                 context,
                 options,
                 props: initNode.params[0],
+                allowHelperTypes: true,
               });
             }
           } else if (
@@ -237,6 +271,7 @@ const enforceRouteParamsRule = createRule({
               context,
               options,
               props: node.params[0],
+              allowHelperTypes: true,
             });
           }
         }

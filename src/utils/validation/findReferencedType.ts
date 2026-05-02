@@ -1,6 +1,6 @@
 import type { Context } from "../../rules/enforce-route-params";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
-import type { TSTypeReference } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+import type { TSTypeReference } from "../../../node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 
 export function findReferencedType(
   typeReference: TSTypeReference,

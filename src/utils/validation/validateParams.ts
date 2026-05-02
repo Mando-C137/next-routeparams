@@ -3,7 +3,7 @@ import type {
   TypeElement,
   TypeNode,
   TSTypeAnnotation,
-} from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+} from "../../../node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type { Context } from "../../rules/enforce-route-params";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { ALLOWED_PROPS_FOR_PAGE } from "../constants";
@@ -33,9 +33,10 @@ export function validateParams(paramsType: TSTypeLiteral, context: Context) {
       switch (param?.type) {
         case AST_NODE_TYPES.TSTypeLiteral:
           return param;
-        case AST_NODE_TYPES.TSTypeReference:
+        case AST_NODE_TYPES.TSTypeReference: {
           const type = findReferencedType(param, context);
           return type ?? undefined;
+        }
         default:
           return undefined;
       }

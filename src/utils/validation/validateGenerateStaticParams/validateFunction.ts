@@ -2,7 +2,7 @@ import type {
   ArrowFunctionExpression,
   FunctionExpression,
   FunctionDeclaration,
-} from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+} from "../../../../node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type {
   CustomContext,
   MyRuleContext,

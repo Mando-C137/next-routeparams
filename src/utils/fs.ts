@@ -1,7 +1,6 @@
 import path, { posix } from "path";
-import fs from "fs";
-import type { PackageJson } from "type-fest";
 import * as semVer from "semver";
+import { readPackageJson } from "./readPackageJson";
 import {
   ALLOWED_PROPS_FOR_LAYOUT,
   ALLOWED_PROPS_FOR_PAGE,
@@ -45,8 +44,12 @@ function readFileBasedParameters(dirname: string): FilebasedParams {
   const result = folders
     .filter((folder) => folder.startsWith("[") && folder.endsWith("]"))
     .map((folder) => {
-      const catchAll = folder.startsWith("[...");
-      const name = folder.slice(catchAll ? 4 : 1, -1);
+      const optionalCatchAll = folder.startsWith("[[...");
+      const catchAll = optionalCatchAll || folder.startsWith("[...");
+      const name = folder.slice(
+        catchAll ? (optionalCatchAll ? 5 : 4) : 1,
+        optionalCatchAll ? -2 : -1,
+      );
       return { catchAll, name, current: false };
     });
 
@@ -92,7 +95,59 @@ export function getFileInfo(filename: string) {
     allowedPropsForFileNameType: fileNameType
       ? FileNameTypeToAllowedPropsMap[fileNameType]
       : null,
+    routePath: getRoutePath(filename),
+    parentRoutePath: getParentRoutePath(filename),
   };
+}
+
+/**
+ * Derives the Next.js route path from a file path for use with helper types
+ * like PageProps, LayoutProps, or RouteContext.
+ *
+ * Example: src/app/blog/[slug]/page.tsx -> /blog/[slug]
+ */
+export function getRoutePath(filename: string): string | null {
+  const posixPath = toPosixPath(filename);
+  const segments = posixPath.split(posix.sep);
+
+  // Find the app directory
+  const appIndex = segments.findIndex((s) => s === "app");
+  if (appIndex === -1) {
+    return null;
+  }
+
+  // Take everything after app, excluding the file name
+  const routeSegments = segments.slice(appIndex + 1, -1);
+
+  // Filter out route groups (e.g. (marketing)) and parallel routes (e.g. @analytics)
+  const filteredSegments = routeSegments.filter(
+    (segment) => !segment.startsWith("(") && !segment.startsWith("@"),
+  );
+
+  if (filteredSegments.length === 0) {
+    return "/";
+  }
+
+  return "/" + filteredSegments.join("/");
+}
+
+export function getParentRoutePath(filename: string): string | null {
+  const routePath = getRoutePath(filename);
+  if (!routePath) {
+    return null;
+  }
+  if (routePath === "/") {
+    return "/";
+  }
+
+  const segments = routePath.split("/").filter(Boolean);
+  segments.pop();
+
+  if (segments.length === 0) {
+    return "/";
+  }
+
+  return "/" + segments.join("/");
 }
 
 function getFilenameType(
@@ -140,12 +195,4 @@ function isAsyncRequestAPI() {
     return true;
   }
   return null;
-}
-
-function readPackageJson() {
-  const packageJsonPath = path.join(process.cwd(), "package.json");
-  if (!fs.existsSync(packageJsonPath)) {
-    return null;
-  }
-  return JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as PackageJson;
 }

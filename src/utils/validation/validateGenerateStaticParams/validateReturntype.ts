@@ -1,4 +1,4 @@
-import type { TSTypeLiteral } from "node_modules/@typescript-eslint/types/dist/generated/ast-spec";
+import type { TSTypeLiteral } from "../../../../node_modules/@typescript-eslint/types/dist/generated/ast-spec";
 import type { Context } from "../../../rules/enforce-route-params";
 import { AST_NODE_TYPES } from "@typescript-eslint/utils";
 import { getTypeOfMember } from "../validateParams";
@@ -63,10 +63,7 @@ export const validateGenerateStaticParamsInnerReturnTypeOfArray = (
       { customContext, ruleContext },
       paramsMember,
       mustBeString.range,
-      {
-        name: mustBeString.name,
-        type: "string",
-      },
+      { name: mustBeString.name, type: "string" },
     );
     return;
   }
@@ -80,10 +77,7 @@ export const validateGenerateStaticParamsInnerReturnTypeOfArray = (
       { customContext, ruleContext },
       paramsMember,
       mustBeStringArray.range,
-      {
-        name: mustBeStringArray.name,
-        type: "string[]",
-      },
+      { name: mustBeStringArray.name, type: "string[]" },
     );
     return;
   }
@@ -95,30 +89,6 @@ export const validateGenerateStaticParamsInnerReturnTypeOfArray = (
       messageId: "issue:isNoLiteral",
     });
     return;
-  }
-
-  const requiredByFileName = customContext.params.find(
-    (param) => param.current,
-  );
-  if (requiredByFileName != null) {
-    const typeInUhmParams = params.find(
-      (param) => param.name === requiredByFileName.name,
-    );
-    if (typeInUhmParams == null || typeInUhmParams.optional) {
-      ruleContext.report({
-        loc: paramsMember.loc,
-        messageId: "issue:isNoOptionalParam",
-        data: { name: requiredByFileName.name },
-        fix: (fixer) =>
-          fixer.replaceTextRange(
-            paramsMember.range,
-            createGenerateStaticParamsReturntypeArrayArgumentString(
-              customContext.params,
-            ),
-          ),
-      });
-      return;
-    }
   }
 
   return { functionTypes: [], paramTypes: [] };

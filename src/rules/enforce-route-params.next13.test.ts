@@ -1,30 +1,14 @@
 import path from "path";
+import { beforeAll, afterAll, describe, vi } from "vitest";
 import { createTester } from "./testdata";
-import type { PackageJson } from "type-fest";
-import type fs from "fs";
 import type { RunTests } from "@typescript-eslint/rule-tester";
 import type { MessageIds, Options } from "./enforce-route-params";
 
-jest.mock("fs", () => {
-  const actualFs = jest.requireActual<typeof fs>("fs");
-  return {
-    ...actualFs,
-    readFileSync: jest.fn((filePath, options) => {
-      if (filePath === path.join(process.cwd(), "package.json")) {
-        return JSON.stringify({
-          dependencies: { next: "13.0.0" },
-        } satisfies PackageJson);
-      }
-      return actualFs.readFileSync(filePath, options);
-    }) as typeof fs.readFileSync,
-    existsSync: jest.fn((filePath) => {
-      if (filePath === path.join(process.cwd(), "package.json")) {
-        return true;
-      }
-      return actualFs.existsSync(filePath);
-    }) as typeof fs.existsSync,
-  };
-});
+vi.mock("../utils/readPackageJson", () => ({
+  readPackageJson: vi.fn(() => ({
+    dependencies: { next: "13.0.0" },
+  })),
+}));
 
 const allCases: RunTests<MessageIds, Options> = {
   valid: [
@@ -196,7 +180,7 @@ const allCases: RunTests<MessageIds, Options> = {
             }
             export default Page;
       `,
-      options: [{ searchParams: false }],
+      options: [{ searchParams: false, helperTypes: false }],
       filename: path.join("src", "app", "page.tsx"),
     },
     {
@@ -209,6 +193,45 @@ const allCases: RunTests<MessageIds, Options> = {
             export default Layout;
       `,
       filename: path.join("src", "app", "layout.tsx"),
+    },
+    {
+      name: "generateStaticParams as arrow function misses current route param",
+      code: `export const generateStaticParams = () : {optionalFirst: string, optionalSecond: string }[] => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
+    },
+    {
+      name: "generateStaticParams as arrow function is not allowed to have current route param as optional",
+      code: `export const generateStaticParams = () : {optionalFirst?: string, optionalSecond?: string, id?: string }[] => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
+    },
+    {
+      name: "async generateStaticParams as arrow function corrects wrong return type",
+      code: `export const generateStaticParams  = async (): Promise<{ id?: string }[]> => []`,
+      filename: path.join(
+        "src",
+        "app",
+        "movies",
+        "[optionalFirst]",
+        "[optionalSecond]",
+        "[id]",
+        "page.tsx",
+      ),
     },
   ],
   invalid: [
@@ -674,7 +697,7 @@ const allCases: RunTests<MessageIds, Options> = {
       code: `const generateStaticParams = function(parameters : {params : { id : string}}): { id: string; reviewId?: string} {return [{ id: "hallo"}]}`,
       output: `const generateStaticParams = function(parameters : {params : { id : string}}): {
     reviewId?: string;
-    id: string;
+    id?: string;
 }[]  {return [{ id: "hallo"}]}`,
       errors: [
         {
@@ -696,7 +719,7 @@ const allCases: RunTests<MessageIds, Options> = {
       return []
       }`,
       output: `function generateStaticParams(): {
-    id: string;
+    id?: string;
 }[] {
       return []
       }`,
@@ -711,7 +734,7 @@ const allCases: RunTests<MessageIds, Options> = {
       name: "generateStaticParams as arrow function replaces keys of returntype of 'nick' with 'id' ",
       code: `export const generateStaticParams = () : { nick: string }[] => []`,
       output: `export const generateStaticParams = () : {
-    id: string;
+    id?: string;
 }[] => []`,
       filename: path.join("src", "app", "movies", "[id]", "page.tsx"),
       errors: [
@@ -720,54 +743,7 @@ const allCases: RunTests<MessageIds, Options> = {
         },
       ],
     },
-    {
-      name: "generateStaticParams as arrow function misses current route param",
-      code: `export const generateStaticParams = () : {optionalFirst: string, optionalSecond: string }[] => []`,
-      output: `export const generateStaticParams = () : {
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[] => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-          data: { name: "id" },
-        },
-      ],
-    },
-    {
-      name: "generateStaticParams as arrow function is not allowed to have current route param as optional",
-      code: `export const generateStaticParams = () : {optionalFirst?: string, optionalSecond?: string, id?: string }[] => []`,
-      output: `export const generateStaticParams = () : {
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[] => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-          data: { name: "id" },
-        },
-      ],
-    },
+
     {
       name: "generateMetadata as arrow function is not allowed to have current route param as optional",
       code: `export const generateMetadata  = ( props: { params : { id:number}} ) => []`,
@@ -814,7 +790,7 @@ const allCases: RunTests<MessageIds, Options> = {
       output: `export const generateStaticParams  = () : {
     optionalFirst?: string;
     optionalSecond?: string;
-    id: string;
+    id?: string;
 }[] => []`,
       filename: path.join(
         "src",
@@ -838,7 +814,7 @@ const allCases: RunTests<MessageIds, Options> = {
       output: `export const generateStaticParams  = async () : Promise<{
     optionalFirst?: string;
     optionalSecond?: string;
-    id: string;
+    id?: string;
 }[]> => []`,
       filename: path.join(
         "src",
@@ -855,29 +831,7 @@ const allCases: RunTests<MessageIds, Options> = {
         },
       ],
     },
-    {
-      name: "async generateStaticParams as arrow function corrects wrong return type",
-      code: `export const generateStaticParams  = async (): Promise<{ id?: string }[]> => []`,
-      output: `export const generateStaticParams  = async (): Promise<{
-    optionalFirst?: string;
-    optionalSecond?: string;
-    id: string;
-}[]> => []`,
-      filename: path.join(
-        "src",
-        "app",
-        "movies",
-        "[optionalFirst]",
-        "[optionalSecond]",
-        "[id]",
-        "page.tsx",
-      ),
-      errors: [
-        {
-          messageId: "issue:isNoOptionalParam",
-        },
-      ],
-    },
+
     {
       name: "async generateStaticParams as normal function corrects wrong return type",
       code: `export async function generateStaticParams(): Promise<{ id: number}[]> {return [];}`,
